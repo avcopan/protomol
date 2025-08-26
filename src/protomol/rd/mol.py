@@ -3,8 +3,10 @@
 import copy
 
 import numpy
+import py3Dmol
+from PIL.Image import Image
 from rdkit import Chem
-from rdkit.Chem import Descriptors, Mol, rdDistGeom, rdmolfiles
+from rdkit.Chem import Descriptors, Draw, Mol, rdDistGeom, rdmolfiles
 
 from ..util import units
 from ..util.types import NDArray
@@ -84,6 +86,57 @@ def has_coordinates(mol: Mol) -> bool:
     :return: `True` if it does, `False` if not
     """
     return bool(mol.GetNumConformers())
+
+
+# convert
+def image(
+    mol: Mol, *, label: bool = True, num_dct: dict[int, int] | None = None
+) -> Image:
+    """Generate a display-able image.
+
+    If label=True but no mapping is specified, the flat indices will be used.
+
+    :param mols: RDKit molecules
+    :param label: Whether to label the atoms
+    :param mapping: An alternative mapping
+    :return: PIL Image
+    """
+    if label or num_dct is not None:
+        mol = with_numbers(mol, num_dct=num_dct, in_place=False)
+
+    return Draw.MolToImage(mol)
+
+
+def view(
+    mol: Mol, *, label: bool = True, width: int = 600, height: int = 450
+) -> py3Dmol.view:
+    """View molecule as a 3D structure.
+
+    :param geo: Geometry
+    :param width: Width
+    :param height: Height
+    """
+    xyz_str = Chem.MolToXYZBlock(mol)
+
+    viewer = py3Dmol.view(width=width, height=height)
+    viewer.addModel(xyz_str, "xyz")
+    viewer.setStyle({"stick": {}, "sphere": {"scale": 0.3}})
+
+    if label:
+        for idx in range(mol.GetNumAtoms()):
+            viewer.addLabel(
+                idx,
+                {
+                    "backgroundOpacity": 0.0,
+                    "fontColor": "black",
+                    "alignment": "center",
+                    "inFront": True,
+                },
+                {"index": idx},
+            )
+
+    viewer.zoomTo()
+    return viewer
 
 
 # transformations

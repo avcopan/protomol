@@ -5,7 +5,8 @@ from typing import TypeVar
 
 import networkx as nx
 from networkx.algorithms.isomorphism import GraphMatcher
-from rdkit.Chem import Mol, rdChemReactions
+from rdkit.Chem import Mol, rdChemReactions, Draw
+from PIL.Image import Image
 
 from . import mol as m_
 
@@ -39,6 +40,23 @@ def atom_keys(mols: Mols) -> list[AtomKey]:
         for mol_idx, mol in enumerate(mols)
         for atom_idx in range(mol.GetNumAtoms())
     ]
+
+
+# convert
+def image(mols: Mols, *, label: bool=True, mapping: AtomMapping | None = None) -> Image:
+    """Generate a display-able image.
+
+    If label=True but no mapping is specified, the flat indices will be used.
+
+    :param mols: RDKit molecules
+    :param label: Whether to label the atoms
+    :param mapping: An alternative mapping
+    :return: PIL Image
+    """
+    if label or mapping is not None:
+        mols = with_flat_index_numbers(mols, mapping=mapping, in_place=False)
+
+    return Draw.MolsToImage(mols)
 
 
 # transformations
