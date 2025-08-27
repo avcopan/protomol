@@ -5,8 +5,8 @@ from typing import TypeVar
 
 import networkx as nx
 from networkx.algorithms.isomorphism import GraphMatcher
-from rdkit.Chem import Mol, rdChemReactions, Draw
 from PIL.Image import Image
+from rdkit.Chem import Draw, Mol, rdChemReactions
 
 from . import mol as m_
 
@@ -43,7 +43,9 @@ def atom_keys(mols: Mols) -> list[AtomKey]:
 
 
 # convert
-def image(mols: Mols, *, label: bool=True, mapping: AtomMapping | None = None) -> Image:
+def image(
+    mols: Mols, *, label: bool = True, mapping: AtomMapping | None = None
+) -> Image:
     """Generate a display-able image.
 
     If label=True but no mapping is specified, the flat indices will be used.

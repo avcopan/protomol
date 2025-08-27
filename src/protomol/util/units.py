@@ -13,6 +13,6 @@ def distance_conversion(unit0: str = DISTANCE_UNIT, unit: str = DISTANCE_UNIT) -
     :return: Conversion factor
     """
     if unit0 == unit:
-        return 1.
+        return 1.0
 
     return Quantity(unit0).m_as(unit)

@@ -4,7 +4,6 @@ import numpy
 from pydantic import BeforeValidator, GetPydanticSchema, PlainSerializer, SkipValidation
 from pydantic_core import core_schema
 
-
 # Source: https://github.com/coltonbh/qcio/blob/master/qcio/helper_types.py
 NDArray = Annotated[
     SkipValidation[numpy.ndarray],
