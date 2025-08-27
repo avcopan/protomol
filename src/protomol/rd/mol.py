@@ -172,16 +172,24 @@ def with_numbers(
     return mol
 
 
-def with_coordinates(mol: Mol, in_place: bool = False) -> Mol:
+def with_coordinates(
+    mol: Mol, in_place: bool = False, bmat: np.ndarray | None = None
+) -> Mol:
     """Add coordinates to RDKit molecule, if missing.
 
     :param mol: RDKit molecule
     :param in_place: Whether to modify the molecule in place
     :return: RDKit molecule
     """
-    if not has_coordinates(mol):
+    if bmat is not None or not has_coordinates(mol):
         mol = mol if in_place else copy.deepcopy(mol)
-        rdDistGeom.EmbedMolecule(mol)
+
+        # Set Distance Geometry (DG) bounds matrix
+        bmat = dg_bounds_matrix(mol) if bmat is None else bmat
+        params = rdDistGeom.ETKDGv3()
+        params.SetBoundsMat(bmat)
+
+        rdDistGeom.EmbedMolecule(mol, params=params)
     return mol
 
 
@@ -201,7 +209,7 @@ def neighbors(mol: Mol) -> dict[int, list[int]]:
 
 
 # edit geometries
-def dg_bounds(mol: Mol) -> np.ndarray:
+def dg_bounds_matrix(mol: Mol) -> np.ndarray:
     """Get Distance Geometry (DG) bounds matrix.
 
     The lower triangle contains lower bounds, while the upper triangle contains
@@ -214,9 +222,22 @@ def dg_bounds(mol: Mol) -> np.ndarray:
 
 
 def dg_bounds_change_dist(
-    mol: Mol, idx1: int, idx2: int, value: float, bounds: np.ndarray | None = None
+    mol: Mol, idx1: int, idx2: int, value: float, bmat: np.ndarray | None = None
 ) -> np.ndarray:
-    """Change distance in Distance Geometry (DG) bounds.
+    r"""Change distance in Distance Geometry (DG) bounds.
+
+    Dependent neighbors are adjusted based on the law of cosines:
+
+        c = sqrt(a^2 + b0^2 - 2 a b0 cos(g))
+
+        cos(g) = (a0^2 + b0^2 - c0^2) / (2 a0 b0)
+
+                           1
+               1           |\
+            a0 |\  c0    a | \ c
+               |g \        |g \
+               2---3       2---3
+                 b0          b0
 
     :param mol: RDKit molecule
     :param idx1: Atom 1 index
@@ -225,44 +246,62 @@ def dg_bounds_change_dist(
     :param bounds: Optionally pass in bounds matrix to update
     :return: Updated distance geometry bounds matrix
     """
-    bounds = dg_bounds(mol) if bounds is None else bounds
-    idx1, idx2 = sorted((idx1, idx2))
+    bmat0 = dg_bounds_matrix(mol) if bmat is None else bmat
+    bmat = bmat0.copy()
 
     # 1. Set main distance
-    bounds[idx1, idx2] += value
-    bounds[idx2, idx1] += value
+    bmat[idx1, idx2] += value
+    bmat[idx2, idx1] += value
 
-    # 2. Identify neighbors affected by this change
-    nidxs1 = dg_dist_neighbors(mol, idx2, idx1)
-    nidxs2 = dg_dist_neighbors(mol, idx1, idx2)
-    print(nidxs1, nidxs2)
+    # 2. If 1 and 2 are connected, identify dependent neighbors and adjust their distances
+    neighbor_dct = neighbors(mol)
+    if idx1 in neighbor_dct[idx2]:
+        ring_info = mol.GetRingInfo()
+        rings = list(map(set, ring_info.AtomRings()))
 
-    # TODO: Update idx1 - nidx2 and idx2 - nidx1 distances...
-    # Formula:
-    #   c = sqrt(c0^2 + d(2 a0 + d - 2b cos(gamma)))
-    #   cos(gamma) = (a0^2 + b^2 - c0^2) / (2 a0 b0)
+        bounds0 = Bounds(bmat0)
+        bounds = Bounds(bmat)
+        for i1, i2 in itertools.permutations((idx1, idx2)):
+            for i3 in neighbor_dct[i2]:
+                is_in_ring = any({i1, i2, i3} <= ring for ring in rings)
+                if i3 != idx1 and not is_in_ring:
+                    for lower in (True, False):
+                        a0 = bounds0.get(i1, i2, lower=lower)
+                        b0 = bounds0.get(i2, i3, lower=lower)
+                        c0 = bounds0.get(i1, i3, lower=lower)
+                        a = bounds.get(i1, i2, lower=lower)
+                        cos_g = (a0**2 + b0**2 - c0**2) / (2 * a0 * b0)
+                        c = np.sqrt(a**2 + b0**2 - 2 * a * b0 * cos_g)
+                        bounds.set(i1, i3, c, lower=lower)
+
+        bmat = bounds.matrix
 
     # 3. Do triangle smoothing
-    DistanceGeometry.DoTriangleSmoothing(bounds)
-    return bounds
+    DistanceGeometry.DoTriangleSmoothing(bmat)
+    return bmat
 
 
-def dg_dist_neighbors(mol: Mol, idx1: int, idx2: int) -> list[int]:
-    """Get neighbors associated with a Distance Geometry (DG) distance.
+# Helper class for working with the bounds matrix
+class Bounds:
+    def __init__(self, bmat: np.ndarray):
+        """Initialize bounds matrix"""
+        self.bmat = bmat
 
-    :param mol: RDKit molecule
-    :param idx1: Atom 1 index
-    :param idx2: Atom 2 index
-    :return: Neighbors of index 2 that should vary with the 1-2 distance
-    """
-    neighbor_dct = neighbors(mol)
+    @property
+    def matrix(self) -> np.ndarray:
+        """Bounds matrix"""
+        return self.bmat
 
-    ring_info = mol.GetRingInfo()
-    rings = list(map(set, ring_info.AtomRings()))
+    def get(self, idx1: int, idx2: int, lower: bool = False) -> float:
+        """Get upper or lower bound value."""
+        idx1, idx2 = sorted((idx1, idx2))
+        if lower:
+            return self.bmat[idx2, idx1]
+        return self.bmat[idx1, idx2]
 
-    nidxs = []
-    for nidx in neighbor_dct[idx2]:
-        is_in_ring = any({idx1, idx2, nidx} <= ring for ring in rings)
-        if nidx != idx1 and not is_in_ring:
-            nidxs.append(nidx)
-    return nidxs
+    def set(self, idx1: int, idx2: int, value: float, lower: bool = False) -> None:
+        """Set upper or lower bound value."""
+        idx1, idx2 = sorted((idx1, idx2))
+        if lower:
+            self.bmat[idx2, idx1] = value
+        self.bmat[idx1, idx2] = value
