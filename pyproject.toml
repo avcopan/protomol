@@ -16,7 +16,8 @@ platforms = ["linux-64"]
 [tool.pixi.pypi-dependencies]
 protomol = { path = ".", editable = true }
 
-[tool.pixi.tasks]
+[tool.pixi.feature.lint.tasks]
+lint = "lefthook run pre-commit --all-files"
 
 [tool.pixi.dependencies]
 numpy = ">=2.0"
@@ -29,5 +30,27 @@ pydantic = "*"
 [tool.pixi.feature.dev.dependencies]
 ipykernel = "*"
 
+[tool.pixi.feature.lint.dependencies]
+lefthook = "*"
+ruff = "*"
+mypy = ">=1.17.1,<2"
+
 [tool.pixi.environments]
-dev = ["dev"]
+dev = ["dev", "lint"]
+
+# Ruff configurations
+[tool.ruff]
+target-version = "py311"
+output-format = "concise"
+fix = true
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "COM812",   # missing trailing comma (handled by format)
+    "RUF022",   # `__all__` is not sorted
+    "TID252",   # relative import
+    # resolve rule conflicts:
+    "D203",     # incorrect blank line before class (uses D211 instead)
+    "D213",     # multi-line summary second line (uses D212 instead)
+]
