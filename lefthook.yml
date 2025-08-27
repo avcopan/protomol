@@ -1,7 +1,9 @@
 pre-commit:
   parallel: true
   commands:
-    ruff-linter:
+    ruff-lint:
       run: ruff check --select I --fix
-    run-format:
+    ruff-format:
       run: ruff format
+    pyright-type-check:
+      run: pyright

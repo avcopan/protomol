@@ -33,7 +33,8 @@ ipykernel = "*"
 [tool.pixi.feature.lint.dependencies]
 lefthook = "*"
 ruff = "*"
-mypy = ">=1.17.1,<2"
+types-networkx = ">=3.5.0.20250827,<4"
+pyright = ">=1.1.403,<2"
 
 [tool.pixi.environments]
 dev = ["dev", "lint"]
@@ -54,3 +55,7 @@ ignore = [
     "D203",     # incorrect blank line before class (uses D211 instead)
     "D213",     # multi-line summary second line (uses D212 instead)
 ]
+
+# Pyright configurations
+[tool.pyright]
+pythonVersion = "3.11"
