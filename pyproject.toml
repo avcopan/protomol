@@ -3,59 +3,96 @@ authors = [{name = "avcopan", email = "avcopan@gmail.com"}]
 dependencies = []
 name = "protomol"
 requires-python = ">= 3.11"
-version = "0.1.0"
+version = "0.2024.0"
 
 [build-system]
 build-backend = "hatchling.build"
 requires = ["hatchling"]
 
+# Pixi configurations
 [tool.pixi.workspace]
 channels = ["conda-forge"]
 platforms = ["linux-64"]
 
+[tool.pixi.tasks]
+
+[tool.pixi.feature.dev.tasks]
+fmt = { cmd="ruff format ." }
+lint = { cmd="ruff check . --fix" }
+types = { cmd="ty check" }
+test = { cmd="pytest" }
+bumpver = { cmd="bumpver" }
+all = { depends-on = ["fmt", "lint", "types", "test"] }
+
 [tool.pixi.pypi-dependencies]
 protomol = { path = ".", editable = true }
 
-[tool.pixi.feature.lint.tasks]
-lint = "lefthook run pre-commit --all-files"
-
 [tool.pixi.dependencies]
-numpy = ">=2.0"
-networkx = ">=3.3"
-rdkit = "*"
-pint = "*"
-py3dmol = "*"
-pydantic = "*"
-
-[tool.pixi.feature.dev.dependencies]
-ipykernel = "*"
-
-[tool.pixi.feature.lint.dependencies]
-lefthook = "*"
-ruff = "*"
-types-networkx = ">=3.5.0.20250827,<4"
-pyright = ">=1.1.403,<2"
+numpy = ">=2.3.5,<3"
+scipy = ">=1.16.3,<2"
+mendeleev = ">=1.1.0,<2"
+py3dmol = ">=2.5.3,<3"
+pydantic = ">=2.12.5,<3"
+rdkit = ">=2025.9.4,<2026"
+pint = ">=0.25.2,<0.26"
+networkx = ">=3.6.1,<4"
 
 [tool.pixi.environments]
-dev = ["dev", "lint"]
+default = { solve-group = "default" }
+dev = { features = ["dev"], solve-group = "default"}
+
+[tool.pixi.feature.dev.dependencies]
+pytest = ">=9.0.1"
+pytest-cov = ">=7.0.0"
+ruff = ">=0.14.7"
+lefthook = ">=2.0.6,<3"
+bumpver = ">=2025.1131,<2026"
+ipykernel = ">=7.1.0,<8"
+
+[tool.pixi.feature.dev.pypi-dependencies]
+ty = "*"
 
 # Ruff configurations
-[tool.ruff]
-target-version = "py311"
-output-format = "concise"
-fix = true
-
 [tool.ruff.lint]
 select = ["ALL"]
 ignore = [
     "COM812",   # missing trailing comma (handled by format)
     "RUF022",   # `__all__` is not sorted
     "TID252",   # relative import
-    # resolve rule conflicts:
-    "D203",     # incorrect blank line before class (uses D211 instead)
-    "D213",     # multi-line summary second line (uses D212 instead)
+    "D203",     # confict: incorrect blank line before class (uses D211 instead)
+    "D213",     # conflict: multi-line summary second line (uses D212 instead)
+]
+exclude = [
+    "*.ipynb",
+    "**/*.ipynb",
 ]
 
-# Pyright configurations
-[tool.pyright]
-pythonVersion = "3.11"
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
+# Pytest configurations
+[tool.pytest.ini_options]
+testpaths = ["tests", "src"]
+addopts = "--doctest-modules"
+doctest_optionflags = "NORMALIZE_WHITESPACE"
+
+# Bumpver configurations
+[tool.bumpver]
+current_version = "0.2024.0"
+version_pattern = "MAJOR.YYYY.PATCH"
+commit_message = "bump version {old_version} -> {new_version}"
+tag_message = "{new_version}"
+tag_scope = "default"
+pre_commit_hook = "scripts/lock.sh"
+post_commit_hook = ""
+commit = true
+tag = true
+push = true
+
+[tool.bumpver.file_patterns]
+"pyproject.toml" = [
+    'version = "{version}"',
+]
+"src/protomol/__init__.py" = [
+    '__version__ = "{version}"',
+]

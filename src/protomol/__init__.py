@@ -1,5 +1,3 @@
-"""Cheminformatics routines."""
+"""protomol."""
 
-from . import geom, rd, util
-
-__all__ = ["geom", "rd", "util"]
+__version__ = "0.2024.0"
