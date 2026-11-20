@@ -117,29 +117,14 @@ class _Base[NodeT: Atom, EdgeT: Bond](Graph[NodeT, EdgeT]):
         """Check the LS against the bonds (the stereo types override this)."""
 
     def __eq__(self, other: object) -> bool:
-        """Labelled equality: the same type, atoms, bonds, charge, spin and LS (P21)."""
+        """Labelled equality: the same type and the same `to_json` (P21)."""
         if type(self) is not type(other):
             return NotImplemented
-        assert isinstance(other, _Base)  # for the type checker  # noqa: S101
-        return self._key() == other._key()
+        from ._json import to_json  # noqa: PLC0415  _json imports this module
+
+        return to_json(self) == to_json(other)  # ty: ignore[invalid-argument-type]
 
     __hash__ = None  # mutable
-
-    def _key(self) -> tuple[object, ...]:
-        """What `==` compares: what `to_json` will write (Step 3)."""
-        nodes = sorted(
-            (atom, dict(self.node_type.model_validate(data)))
-            for atom, data in self.nodes(data=True)
-        )
-        edges = sorted(
-            (
-                min(i, j),
-                max(i, j),
-                tuple(dict(self.edge_type.model_validate(data)).items()),
-            )
-            for i, j, data in self.edges(data=True)
-        )
-        return (nodes, edges, self.graph)
 
 
 class MolGraph(_Base[Atom, Bond]):

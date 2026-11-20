@@ -2,6 +2,7 @@
 
 __version__ = "0.0.0"
 
+from ._json import from_json, to_json
 from ._stereo import (
     AtomStereo,
     AtropBond,
@@ -36,8 +37,10 @@ __all__ = [
     "StereoMolGraph",
     "StereoReactionGraph",
     "Tetrahedral",
+    "from_json",
     "invert",
     "is_determined",
     "isomers",
     "site",
+    "to_json",
 ]
