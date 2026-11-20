@@ -70,8 +70,7 @@ root_package = "protomol"
 name = "Module Layering"
 type = "layers"
 layers = [
-    "protomol.layer2",
-    "protomol.layer1",
+    "protomol._stereo | protomol._graph",
 ]
 
 # Pytest configurations
