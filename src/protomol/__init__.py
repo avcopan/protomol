@@ -14,16 +14,30 @@ from ._stereo import (
     isomers,
     site,
 )
+from ._types import (
+    GraphError,
+    MolGraph,
+    ReactionGraph,
+    StereoMolGraph,
+    StereoReactionGraph,
+    is_determined,
+)
 
 __all__ = [
     "AtomStereo",
     "AtropBond",
     "BondStereo",
+    "GraphError",
+    "MolGraph",
     "PlanarBond",
+    "ReactionGraph",
     "Stereo",
     "StereoChange",
+    "StereoMolGraph",
+    "StereoReactionGraph",
     "Tetrahedral",
     "invert",
+    "is_determined",
     "isomers",
     "site",
 ]
