@@ -6,7 +6,7 @@
 [subrepo]
 	remote = git@github.com:avcopan/StereoMolGraph.git
 	branch = canon
-	commit = 444dbfa66771dd951662abde250b5066786edbb1
-	parent = f408fc988707a4f876dccd40bea90de91d69428c
+	commit = 097f0d12f32a2702975fe17f3820bc1533cb06a8
+	parent = a6157aac0797af60e593c5405b827261a7cfab11
 	method = merge
 	cmdver = 0.4.9
