@@ -1,0 +1,12 @@
+; DO NOT EDIT (unless you know what you are doing)
+;
+; This subdirectory is a git "subrepo", and this file is maintained by the
+; git-subrepo command. See https://github.com/ingydotnet/git-subrepo#readme
+;
+[subrepo]
+	remote = git@github.com:avcopan/StereoMolGraph.git
+	branch = canon
+	commit = 444dbfa66771dd951662abde250b5066786edbb1
+	parent = f408fc988707a4f876dccd40bea90de91d69428c
+	method = merge
+	cmdver = 0.4.9
