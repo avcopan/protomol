@@ -13,6 +13,10 @@ pre-commit:
       run: pixi run -e dev local stop
       tags: [check]
 
+    1a-vendor-check:
+      run: pixi run -e dev vendor-check
+      tags: [check]
+
     2-fmt:
       run: pixi run -e dev fmt
       tags: [check]

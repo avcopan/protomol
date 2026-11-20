@@ -89,6 +89,9 @@ add = "uv add"
 remove = "uv remove"
 # Local dependency management (see scripts/local.sh)
 local = "./scripts/local.sh"
+# Regenerate src/protomol/_vendor/ from extern/ (see scripts/vendor.py)
+vendor = "python scripts/vendor.py"
+vendor-check = "python scripts/vendor.py --check"
 # Run the tests with the lowest dependency versions (see test-lowest environment)
 test-lowest = "pixi run -e test-lowest test"
 # Individual tasks for pre-commit hooks (must be added to lefthook.yaml)
