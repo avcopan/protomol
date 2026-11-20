@@ -6,12 +6,12 @@ license = "MIT"
 license-files = ["LICENSE"]
 authors = [{name = "Andreas V. Copan", email = "avcopan@uga.edu"}]
 dependencies = [
-    "more-itertools>=11.2.1",
-    "networkx>=3.7",
-    "numpy>=2.5.5",
-    "pydantic>=2.14.4",
-    "rdkit>=2026.9.2",
-    "typing-extensions>=4.16.0",
+    "more-itertools>=8",
+    "networkx>=3.5",
+    "numpy>=2.2",
+    "pydantic>=2.9",
+    "rdkit>=2024.9.1",
+    "typing-extensions>=4.12",
 ]
 requires-python = ">= 3.13"
 
