@@ -41,16 +41,25 @@ Labelled equality is not isomorphism. The same molecule with its atoms in anothe
 is a different graph:
 
 ```python
->>> pm.MolGraph(symbols=["H", "O", "H"], bonds=[(0, 1), (1, 2)]) == gra
+>>> hoh = pm.MolGraph(symbols=["H", "O", "H"], bonds=[(0, 1), (1, 2)])
+>>> hoh == gra
 False
+
+```
+
+`relabel(gra, atom_map)` reorders the atoms: atom k of the result is atom `atom_map[k]` of
+`gra`, the direction of AutoStorage's link `atom_map`:
+
+```python
+>>> pm.relabel(gra, [1, 0, 2]) == hoh
+True
 
 ```
 
 ## Canonical form
 
 ::: {.callout-note}
-Planned: Phase 3 (`canonical_form`, `canonical_json`, `low_t`, `high_t`) and Phase 1,
-Step 5 (`relabel`).
+Planned: Phase 3 (`canonical_form`, `canonical_json`, `low_t`, `high_t`).
 :::
 
 ```python

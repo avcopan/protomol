@@ -61,21 +61,44 @@ True
 
 ## A reaction: reactant and product SMILES to TS channels
 
+`ts_graphs` finds the distinct TS channels (CCV). The reactants and products are each one
+graph, which may hold several molecules (`"CC.[OH]"`), with the same charge and spin. The
+atoms of every channel follow the reactant graph's order, and the product LS are carried
+over through the channel's atom mapping:
+
+```python
+>>> rct = pm.from_smiles("CC.[OH]")
+>>> prd = pm.from_smiles("C[CH2].O")
+>>> channels = pm.ts_graphs(rct, prd)  # one StereoReactionGraph per distinct channel
+>>> len(channels)
+1
+>>> ts = channels[0]
+>>> ts.breaking, ts.forming            # an H moves from C0 to O2
+(((0, 3),), ((2, 3),))
+>>> pm.reactants(ts) == rct
+True
+
+```
+
+A bond homolysis gives two radicals, whose default spin is the triplet's; give the products
+the reactant's spin for the singlet channel:
+
+```python
+>>> rct = pm.from_smiles("CCO")
+>>> len(pm.ts_graphs(rct, pm.from_smiles("[CH2]O.[CH3]", spin=rct.spin)))
+1
+
+```
+
 ::: {.callout-note}
-Planned: Phase 1, Step 5 (`ts_graphs`, stereo carried over) and Phase 5 (stereo
-expansion of the TS, fleeting stereo).
+Planned: Phase 5 (stereo expansion of the TS, fleeting stereo).
 :::
 
 ```python
-rct = pm.from_smiles("CC.[OH]")
-prd = pm.from_smiles("C[CH2].O")
-for srg in pm.ts_graphs(rct, prd):     # one StereoReactionGraph per distinct channel
-    for ts in pm.stereoisomers(srg):   # Phase 5: TS stereoisomers, fleeting stereo
+for srg in pm.ts_graphs(rct, prd):
+    for ts in pm.stereoisomers(srg):   # TS stereoisomers, fleeting stereo
         run_ts_workflow(ts)            # ae, illustrative
 ```
-
-The reactants and products are each one graph, which may hold several molecules
-(`"CC.[OH]"`). The atoms of every channel follow the reactant graph's order.
 
 ## Atom-mapped reaction SMILES (the INCITE import)
 

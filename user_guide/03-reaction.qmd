@@ -108,14 +108,27 @@ channels = pm.ts_graphs(z_radical, e_radical)   # the two mirror-image rotation 
 
 ## The two sides, and the IRC end points
 
+`reactants` and `products` give each side as a `StereoMolGraph` in the TS's atom order, with
+the unchanged LS and the matching slot of each change. `reverse` swaps the two:
+
+```python
+>>> rct = pm.reactants(ts)
+>>> prd = pm.products(ts)
+>>> type(rct).__name__, rct.symbols == ts.symbols
+('StereoMolGraph', True)
+>>> pm.stereo_at(rct, (1, 2)) == z, pm.stereo_at(prd, (1, 2)) == e
+(True, True)
+>>> pm.reactants(pm.reverse(ts)) == prd
+True
+
+```
+
 ::: {.callout-note}
-Planned: Phase 1, Step 5 (`reactants`, `products`, `reverse`), Phase 4 (`reacting_core`),
-and Phase 5 (`transition_state`, `inverted_stereo`, end-point atom maps).
+Planned: Phase 4 (`reacting_core`) and Phase 5 (`transition_state`, `inverted_stereo`,
+end-point atom maps).
 :::
 
 ```python
-rct = pm.reactants(ts)          # StereoMolGraph of the reactant side, same atom order
-prd = pm.products(ts)
 core = pm.reacting_core(ts)     # atoms CREST freezes in a TS conformer search
 
 # IRC: perceive each end point and check it against the expected side (illustrative)

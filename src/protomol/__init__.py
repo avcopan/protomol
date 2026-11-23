@@ -2,7 +2,16 @@
 
 __version__ = "0.0.0"
 
+from ._ccv import ts_graphs
 from ._json import from_json, to_json
+from ._reaction import (
+    products,
+    reactants,
+    reaction_graph,
+    relabel,
+    reverse,
+    without_stereo,
+)
 from ._smiles import from_smiles
 from ._stereo import (
     AtomStereo,
@@ -56,9 +65,16 @@ __all__ = [
     "is_determined",
     "isomers",
     "neighbors",
+    "products",
+    "reactants",
+    "reaction_graph",
+    "relabel",
     "remove_stereo",
+    "reverse",
     "site",
     "stereo_at",
     "to_json",
+    "ts_graphs",
     "with_stereo",
+    "without_stereo",
 ]
