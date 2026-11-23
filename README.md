@@ -14,7 +14,9 @@ Installation instructions...
 
 ## Usage
 
-Usage instructions...
+The pages in `user_guide/` show protomol as AutoEngine and
+AutoStorage use it, one page per interface. Their `>>>` examples run as doctests; the
+planned examples show the API still to come.
 
 ## Contributing
 

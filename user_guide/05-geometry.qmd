@@ -1,0 +1,35 @@
+---
+title: Graph and geometry
+---
+
+Atom i of a graph is atom i of its geometry. Every routine crosses between the two: it
+seeds a structure from the graph, and checks each structure it gets back against the graph.
+
+::: {.callout-note}
+Planned: Phase 2 (`from_geometry`, `embed`) and Phase 3 (`stereo_matches`). Geometries are
+autogeom's.
+:::
+
+## Seeding a structure
+
+```python
+geo = pm.embed(smg)               # RDKit ETKDG, with the graph's stereo and atom order
+```
+
+## Checking a structure
+
+A conformer search or an optimization can invert a centre or flip a bond. A structure is
+kept only if it is still the workflow's stereoisomer:
+
+```python
+pm.stereo_matches(smg, geo)       # LS parities read from the coordinates
+```
+
+## Perceiving a graph
+
+For a structure from outside a workflow (an INCITE geometry, an IRC end point), the atom
+order is kept:
+
+```python
+gra = pm.from_geometry(geo)       # a StereoMolGraph with the default (low-T) LS
+```

@@ -1,0 +1,110 @@
+---
+title: Reaction coordinate
+---
+
+A TS workflow runs on one `StereoReactionGraph` (a `ReactionGraph` if stereo doesn't
+matter). The graph says which bonds break and form, which stereo sites change, and what
+the two sides are.
+
+## Bond changes
+
+H abstraction, CH4 + OH → CH3 + H2O (atoms: C0, H1–H4, O5, H6):
+
+```python
+>>> import protomol as pm
+>>> ts = pm.ReactionGraph(
+...     symbols=["C", "H", "H", "H", "H", "O", "H"],
+...     bonds=[(0, 1), (0, 2), (0, 3), (0, 4), (5, 6), (1, 5)],
+...     breaking=[(0, 1)],
+...     forming=[(1, 5)],
+... )
+>>> ts.breaking, ts.forming
+(((0, 1),), ((1, 5),))
+>>> ts.spin
+1
+
+```
+
+A saddle-point search scans or constrains the distances in `breaking` and `forming`. That is
+the whole reaction coordinate. `bonds` holds every bond of the TS, the changing ones included,
+so `pm.neighbors` gives the neighbours on either side:
+
+```python
+>>> pm.neighbors(ts, 1)
+(0, 5)
+
+```
+
+## Stereo that changes
+
+SN2 at a stereocentre, I⁻ + CHFClBr → CHFClI + Br⁻. The centre's LS on the reactant side
+is a `StereoChange`. Its product and TS slots are left open here:
+
+```python
+>>> tet = pm.Tetrahedral(atoms=(0, 1, 2, 3, 4), parity=1)
+>>> ts = pm.StereoReactionGraph(
+...     symbols=["C", "F", "Cl", "Br", "H", "I"],
+...     bonds=[(0, 1), (0, 2), (0, 3), (0, 4), (0, 5)],
+...     breaking=[(0, 3)],
+...     forming=[(0, 5)],
+...     charge=-1,
+...     stereo_changes=[pm.StereoChange(reactant=tet)],
+... )
+>>> change = pm.stereo_at(ts, 0)
+>>> change.reactant.parity, change.product, change.ts
+(1, None, None)
+
+```
+
+A stereo change needs no bond change. In the but-2-en-1-yl radical, CH2•–CH=CH–CH3
+(atoms: C0–C3, H4–H10), resonance gives C1=C2 its double-bond character. Rotating
+about it turns (Z) into (E). The TS graph has no `breaking` or `forming` bonds, only a
+`StereoChange` at the bond (1, 2). A `PlanarBond` lists (a, b, end1, end2, c, d) with
+a cis to c, so (Z) has C0 cis to C3 and (E) has C0 cis to H7. The TS slot stays empty:
+the bond is twisted there, so it has no planar LS.
+
+```python
+>>> z = pm.PlanarBond(atoms=(0, 6, 1, 2, 3, 7), parity=0)
+>>> e = pm.PlanarBond(atoms=(0, 6, 1, 2, 7, 3), parity=0)
+>>> ts = pm.StereoReactionGraph(
+...     symbols=["C", "C", "C", "C"] + ["H"] * 7,
+...     bonds=[(0, 1), (1, 2), (2, 3), (0, 4), (0, 5), (1, 6), (2, 7), (3, 8), (3, 9), (3, 10)],
+...     stereo_changes=[pm.StereoChange(reactant=z, product=e)],
+... )
+>>> ts.breaking, ts.forming, ts.spin
+((), (), 1)
+>>> change = pm.stereo_at(ts, (1, 2))
+>>> change.reactant == z, change.product == e, change.ts
+(True, True, None)
+
+```
+
+This C1=C2 bond is a low-T stereo element: the other resonance form puts the double
+bond at C0=C1, so a high-T scheme (InChI) drops it. Step 7 ships this graph as
+`pm.examples.stereoisomerization_ts()`.
+
+## The two sides, and the IRC end points
+
+::: {.callout-note}
+Planned: Phase 1, Step 5 (`reactants`, `products`, `reverse`), Phase 4 (`reacting_core`),
+and Phase 5 (`transition_state`, `inverted_stereo`, end-point atom maps).
+:::
+
+```python
+rct = pm.reactants(ts)          # StereoMolGraph of the reactant side, same atom order
+prd = pm.products(ts)
+core = pm.reacting_core(ts)     # atoms CREST freezes in a TS conformer search
+
+# IRC: perceive each end point and check it against the expected side (illustrative)
+fwd, bwd = run_irc(ts_geo)                                     # ae, illustrative
+ok = pm.without_stereo(pm.from_geometry(fwd)) == pm.without_stereo(prd)  # same bonds
+ok = ok and pm.stereo_matches(prd, fwd)                                  # same stereo
+```
+
+Each side may hold several molecules. Splitting a side into its molecules, each with its
+own atom map, is not planned yet:
+
+```python
+for mol, atom_map in pm.components(prd):   # PROPOSED: name and return type
+    ...
+```

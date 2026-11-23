@@ -1,0 +1,81 @@
+---
+title: Workflow entry
+---
+
+An `ae` workflow runs on one fixed graph: one stereoisomer of a species, or one TS channel.
+The user starts from SMILES, and the first step turns it into the distinct, fully determined
+graphs, one workflow each.
+
+## A species: SMILES to stereoisomers
+
+::: {.callout-note}
+Planned: Phase 1, Step 4 (`from_smiles`) and Phase 5 (`stereoisomers`).
+:::
+
+```python
+import protomol as pm
+
+gra = pm.from_smiles("CC(O)CC")        # butan-2-ol, centre not specified
+pm.is_determined(gra)                  # False: C1 has an undetermined Tetrahedral
+for smg in pm.stereoisomers(gra):      # (R) and (S), as two determined graphs
+    run_species_workflow(smg)          # ae, illustrative
+```
+
+Until then, the same enumeration by hand, for a graph with one centre (CHFClBr):
+
+```python
+>>> import protomol as pm
+>>> gra = pm.StereoMolGraph(
+...     symbols=["C", "F", "Cl", "Br", "H"],
+...     bonds=[(0, 1), (0, 2), (0, 3), (0, 4)],
+...     atom_stereo=[pm.Tetrahedral(atoms=(0, 1, 2, 3, 4))],
+... )
+>>> pm.is_determined(gra)
+False
+>>> ls = pm.stereo_at(gra, 0)
+>>> ls.parity is None
+True
+>>> isomers = [pm.with_stereo(gra, ls_) for ls_ in pm.isomers(ls)]
+>>> [pm.is_determined(smg) for smg in isomers]
+[True, True]
+>>> [smg.atom_stereo[0].parity for smg in isomers]
+[1, -1]
+>>> isomers[0] == isomers[1]
+False
+
+```
+
+A species given with full stereo needs no expansion:
+
+```python
+gra = pm.from_smiles("C[C@@H](O)/C=C/C")   # one stereoisomer of pent-3-en-2-ol
+pm.is_determined(gra)                       # True
+```
+
+## A reaction: reactant and product SMILES to TS channels
+
+::: {.callout-note}
+Planned: Phase 1, Step 5 (`ts_graphs`, stereo carried over) and Phase 5 (stereo
+expansion of the TS, fleeting stereo).
+:::
+
+```python
+rct = pm.from_smiles("CC.[OH]")
+prd = pm.from_smiles("C[CH2].O")
+for srg in pm.ts_graphs(rct, prd):     # one StereoReactionGraph per distinct channel
+    for ts in pm.stereoisomers(srg):   # Phase 5: TS stereoisomers, fleeting stereo
+        run_ts_workflow(ts)            # ae, illustrative
+```
+
+The reactants and products are each one graph, which may hold several molecules
+(`"CC.[OH]"`). The atoms of every channel follow the reactant graph's order.
+
+## Atom-mapped reaction SMILES (the INCITE import)
+
+::: {.callout-note}
+Planned: Phase 2 (pm P29). Its name and atom order follow stereomol (D1).
+:::
+
+```python
+rxn = pm.from_reaction_smiles("[CH3:1][H:2].[OH:3]>>[CH3:1].[H:2][OH:3]")  # PROPOSED: name
+```

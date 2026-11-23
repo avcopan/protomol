@@ -1,0 +1,27 @@
+---
+title: Use cases
+---
+
+These pages show protomol as AutoEngine (`ae`) and AutoStorage will use it, one page
+per interface. They are the place to review the API as it is called, alongside the code.
+protomol's API is the draft of stereomol's Python API, so what reads well here is what
+stereomol will offer.
+
+| page | interface |
+|---|---|
+| [Workflow entry](01-entry.qmd) | SMILES (or a reactant and product pair) to the graphs that start a workflow |
+| [Identity](02-identity.qmd) | AutoStorage's graph identities, and graphs as stored and passed data |
+| [Reaction coordinate](03-reaction.qmd) | What a saddle-point search and an IRC read from a TS graph |
+| [Flexibility and thermo](04-flexibility.qmd) | Conformer sampling, rotor, umbrella and ring scans, symmetry numbers, the kinetics network |
+| [Graph and geometry](05-geometry.qmd) | Seeding structures from a graph, and checking structures against it |
+
+## Live and planned examples
+
+- **Live** examples are `>>>` blocks. pytest runs them as doctests (`--doctest-glob=*.qmd`)
+  in pre-commit, so they always match the code.
+- **Planned** examples are plain code blocks under a "Planned" callout naming the phase
+  (see protomol's `PLAN.md` in the project notes). They use the names already planned. A
+  name that is not yet planned is marked `# PROPOSED:`. AutoEngine and AutoStorage code that
+  doesn't exist yet is marked `# illustrative`: only the protomol calls in it are under
+  review.
+- The step that implements a planned call turns its block into a live one.

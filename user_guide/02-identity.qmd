@@ -1,0 +1,91 @@
+---
+title: Identity
+---
+
+AutoStorage names each stationary point by several identity algorithms. The graph-based
+ones take the geometry and the graph the user is working with, index-aligned
+(`identity_fn(geo, gra, other_geos)`), and store a canonical form.
+
+## Graphs as data
+
+A graph is a frozen value. `==` and `hash` compare its fields (labelled equality), and the
+JSON is one byte string per graph:
+
+```python
+>>> import protomol as pm
+>>> gra = pm.MolGraph(symbols=["O", "H", "H"], bonds=[(0, 1), (0, 2)])
+>>> pm.to_json(gra)
+'{"type":"MolGraph","symbols":["O","H","H"],"bonds":[[0,1],[0,2]],"charge":0,"spin":0}'
+>>> pm.from_json(pm.to_json(gra)) == gra
+True
+>>> len({gra, pm.MolGraph(symbols=["O", "H", "H"], bonds=[(2, 0), (1, 0)])})
+1
+
+```
+
+Any graph type can be a field of another pydantic model, which is how a task's input or a
+row can carry one:
+
+```python
+>>> from pydantic import BaseModel
+>>> class SpeciesTask(BaseModel):  # ae, illustrative
+...     graph: pm.AnyGraph
+...     method: str
+>>> task = SpeciesTask(graph=gra, method="b3lyp/6-31g*")
+>>> SpeciesTask.model_validate_json(task.model_dump_json()).graph == gra
+True
+
+```
+
+Labelled equality is not isomorphism. The same molecule with its atoms in another order
+is a different graph:
+
+```python
+>>> pm.MolGraph(symbols=["H", "O", "H"], bonds=[(0, 1), (1, 2)]) == gra
+False
+
+```
+
+## Canonical form
+
+::: {.callout-note}
+Planned: Phase 3 (`canonical_form`, `canonical_json`, `low_t`, `high_t`) and Phase 1,
+Step 5 (`relabel`).
+:::
+
+```python
+can, atom_map = pm.canonical_form(gra)   # atom k of `can` is atom atom_map[k] of `gra`
+pm.relabel(can, atom_map) == gra         # True: the input graph is recoverable
+pm.canonical_json(gra)                   # the string AutoStorage stores
+```
+
+## An SMG identity algorithm
+
+::: {.callout-note}
+Planned: Phases 2 and 3. The AutoStorage side (`IdentityResult`, the registry, the
+`graph=` argument) is AutoStorage's API, shown here only for the protomol calls in it.
+:::
+
+```python
+from autostorage import IdentityResult    # illustrative
+
+def smg_low_t(geo, gra, other_geos):      # registered as "smg_low_t@1", orders {0, 1}
+    if gra is None:                       # order 0 only; order 1 skips SMG identities
+        gra = pm.from_geometry(geo)
+    elif not pm.stereo_matches(gra, geo): # wrong stereoisomer: warn, perceive instead
+        gra = pm.from_geometry(geo)
+    can, atom_map = pm.canonical_form(pm.low_t(gra))
+    return IdentityResult(value=pm.canonical_json(can), atom_map=atom_map)
+```
+
+`smg@1` skips `low_t` (the graph as given), `smg_high_t@1` uses `high_t`, and `smg_conn@1`
+uses `pm.without_stereo`. The value is the JSON or its hash (pm open question 1).
+
+## Storing and finding a point by its graph
+
+```python
+point = StationaryPointRow(geometry=geo, calculation=calc, order=0, graph=smg)  # illustrative
+session.add(point)                        # the identities are computed on flush
+
+stmt = autostorage.query.stationary_points(graph=smg, algorithm="smg@1")        # illustrative
+```

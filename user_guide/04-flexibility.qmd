@@ -1,0 +1,64 @@
+---
+title: Flexibility and thermo
+---
+
+The LS set is the dynamical model. A bond with an LS is rigid, and a bond without one may
+be a rotor. The same LS decide the symmetry number, so conformer sampling, scans and the
+partition function all agree.
+
+## What the routines read now
+
+The charge, the spin and the neighbours are fields and functions today:
+
+```python
+>>> import protomol as pm
+>>> ch3 = pm.MolGraph(symbols=["C", "H", "H", "H"], bonds=[(0, 1), (0, 2), (0, 3)])
+>>> ch3.charge, ch3.spin
+(0, 1)
+>>> pm.neighbors(ch3, 0)
+(1, 2, 3)
+
+```
+
+## Conformer sampling
+
+::: {.callout-note}
+Planned: Phase 4 (`rotatable_bonds`, `rings`, `reacting_core`). Ring puckering and which
+torsions in a TS core are rotors are pm open question 4.
+:::
+
+```python
+torsions = pm.rotatable_bonds(smg)       # bonds to sample; never one with a bond LS
+frozen = pm.reacting_core(ts)            # TS only: atoms CREST constrains
+conformers = run_crest(pm.embed(smg), constrain=frozen)        # ae, illustrative
+kept = [geo for geo in conformers if pm.stereo_matches(smg, geo)]
+```
+
+## Scans for the partition function
+
+::: {.callout-note}
+Planned: Phase 4 (`rotors`, `umbrellas`, `rings`, `rigid_groups`, `symmetry_number`).
+:::
+
+```python
+for rotor in pm.rotors(smg):             # Rotor(axis, top, symmetry)
+    scan_torsion(geo, axis=rotor.axis, moving=rotor.top, period=rotor.symmetry)  # illustrative
+for umb in pm.umbrellas(smg):            # Umbrella(center, neighbors): pyramidal N, CH3
+    scan_umbrella(geo, umb.center, umb.neighbors)                # illustrative
+pm.rings(smg)                            # rigid in v1; ring conformers are CREST minima
+pm.symmetry_number(smg)                  # total |Aut|: 12 for CH4, 18 for ethane
+```
+
+MESS-PF also takes `smg.spin` (as 2S + 1) and the symmetry number.
+
+## The kinetics network
+
+::: {.callout-note}
+Planned: Phase 5 (`is_enantiomer`). The network API is open (am Phase 6).
+:::
+
+```python
+# Nodes are the identities of each TS's sides; enantiomeric nodes are lumped (illustrative)
+nodes = {identity(side) for ts in channels for side in (pm.reactants(ts), pm.products(ts))}
+pm.is_enantiomer(smg_a, smg_b)           # lump the pair and adjust sigma_eff
+```
