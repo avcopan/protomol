@@ -37,22 +37,29 @@ so `pm.neighbors` gives the neighbours on either side:
 
 ## Stereo that changes
 
-SN2 at a stereocentre, I⁻ + CHFClBr → CHFClI + Br⁻. The centre's LS on the reactant side
-is a `StereoChange`. Its product and TS slots are left open here:
+Each slot of a `StereoChange` (`reactant`, `product`, `ts`) holds the LS of that site on
+that side. `None` means the side has no stereo element there. An element whose
+configuration isn't chosen is an undetermined LS (`parity=None`), not `None`.
+
+SN2 at a stereocentre, I⁻ + CHFClBr → CHFClI + Br⁻ (atoms: C0, F1, Cl2, Br3, H4, I5).
+The centre's LS changes, so it is a `StereoChange`. Backside attack inverts the centre: I5
+takes the place of Br3 with the opposite parity. The TS slot is left out: its
+five-coordinate centre needs an LS type that protomol doesn't have yet.
 
 ```python
->>> tet = pm.Tetrahedral(atoms=(0, 1, 2, 3, 4), parity=1)
+>>> rct = pm.Tetrahedral(atoms=(0, 1, 2, 3, 4), parity=1)
+>>> prd = pm.Tetrahedral(atoms=(0, 1, 2, 5, 4), parity=-1)
 >>> ts = pm.StereoReactionGraph(
 ...     symbols=["C", "F", "Cl", "Br", "H", "I"],
 ...     bonds=[(0, 1), (0, 2), (0, 3), (0, 4), (0, 5)],
 ...     breaking=[(0, 3)],
 ...     forming=[(0, 5)],
 ...     charge=-1,
-...     stereo_changes=[pm.StereoChange(reactant=tet)],
+...     stereo_changes=[pm.StereoChange(reactant=rct, product=prd)],
 ... )
 >>> change = pm.stereo_at(ts, 0)
->>> change.reactant.parity, change.product, change.ts
-(1, None, None)
+>>> change.reactant == rct, change.product == prd
+(True, True)
 
 ```
 
@@ -60,28 +67,42 @@ A stereo change needs no bond change. In the but-2-en-1-yl radical, CH2•–CH=
 (atoms: C0–C3, H4–H10), resonance gives C1=C2 its double-bond character. Rotating
 about it turns (Z) into (E). The TS graph has no `breaking` or `forming` bonds, only a
 `StereoChange` at the bond (1, 2). A `PlanarBond` lists (a, b, end1, end2, c, d) with
-a cis to c, so (Z) has C0 cis to C3 and (E) has C0 cis to H7. The TS slot stays empty:
-the bond is twisted there, so it has no planar LS.
+a cis to c, so (Z) has C0 cis to C3 and (E) has C0 cis to H7.
+
+At the TS the bond is twisted about 90°, which makes it a chiral axis: an `AtropBond`.
+Rotating one way or the other gives mirror-image TSs (parity 1 or -1). These are
+distinct saddle points, so they are two channels, and a kinetic model needs both. This
+graph leaves the axis undetermined, standing for either one:
 
 ```python
 >>> z = pm.PlanarBond(atoms=(0, 6, 1, 2, 3, 7), parity=0)
 >>> e = pm.PlanarBond(atoms=(0, 6, 1, 2, 7, 3), parity=0)
+>>> twist = pm.AtropBond(atoms=(0, 6, 1, 2, 3, 7))
 >>> ts = pm.StereoReactionGraph(
 ...     symbols=["C", "C", "C", "C"] + ["H"] * 7,
 ...     bonds=[(0, 1), (1, 2), (2, 3), (0, 4), (0, 5), (1, 6), (2, 7), (3, 8), (3, 9), (3, 10)],
-...     stereo_changes=[pm.StereoChange(reactant=z, product=e)],
+...     stereo_changes=[pm.StereoChange(reactant=z, product=e, ts=twist)],
 ... )
 >>> ts.breaking, ts.forming, ts.spin
 ((), (), 1)
 >>> change = pm.stereo_at(ts, (1, 2))
->>> change.reactant == z, change.product == e, change.ts
+>>> change.reactant == z, change.product == e, change.ts.parity
 (True, True, None)
 
 ```
 
 This C1=C2 bond is a low-T stereo element: the other resonance form puts the double
-bond at C0=C1, so a high-T scheme (InChI) drops it. Step 7 ships this graph as
-`pm.examples.stereoisomerization_ts()`.
+bond at C0=C1, so a high-T scheme (InChI) drops it. Step 7 ships one of the two
+channels (the axis determined) as `pm.examples.stereoisomerization_ts()`.
+
+::: {.callout-note}
+Planned: Phase 5 (`ts_graphs` with fleeting stereo).
+:::
+
+```python
+channels = pm.ts_graphs(z_radical, e_radical)   # the two mirror-image rotation TSs
+[pm.stereo_at(ts, (1, 2)).ts.parity for ts in channels]   # [-1, 1]
+```
 
 ## The two sides, and the IRC end points
 
