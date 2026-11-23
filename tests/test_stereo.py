@@ -6,7 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 import protomol as pm
-from protomol._stereo import _FULL_GROUP, _GROUP
+from protomol._stereo import _FULL_GROUP, _GROUP, _INVERSION
 
 type LS = pm.Tetrahedral | pm.PlanarBond | pm.AtropBond
 
@@ -38,6 +38,20 @@ def test_normal_form_is_invariant_under_the_group(ls: LS) -> None:
     rebuilt = {_rebuilt(ls, perm) for perm in group[ls.kind]}
     assert rebuilt == {ls}
     assert {hash(other) for other in rebuilt} == {hash(ls)}
+
+
+@pytest.mark.parametrize("ls", [ls for ls in DETERMINED if ls.parity])
+def test_inverted_atoms_with_opposite_parity_are_equal(ls: LS) -> None:
+    """The inversion with the parity negated describes the same configuration."""
+    inverted = type(ls).model_validate(
+        {
+            **dict(ls),
+            "atoms": tuple(ls.atoms[i] for i in _INVERSION[ls.kind]),
+            "parity": -(ls.parity or 0),
+        }
+    )
+    assert inverted == ls
+    assert hash(inverted) == hash(ls)
 
 
 def test_normal_form_sorts_none_first() -> None:

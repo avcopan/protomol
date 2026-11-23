@@ -4,9 +4,11 @@ The atom tuples, parities and permutation groups mirror stereomolgraph's `Tetrah
 `PlanarBond` and `AtropBond` (`stereodescriptors.py`) (P14). Bond LS add a `chain` of
 inner atoms for cumulated chains (P15).
 
-Every LS is stored in normal form: its atom tuple is the minimum over its permutation
-group, with None before every atom. So `==` and `hash` compare configurations, as
-stereomolgraph's do (stereomol M3.1).
+Every LS is stored in normal form: the minimum atom tuple, with None before every atom,
+over the arrangements that describe its configuration. For a chiral LS those are its
+permutation group applied to its atoms with its parity, and to its inverted atoms with
+the opposite parity (stereomolgraph's `inversion`), so the parity may change sign. So
+`==` and `hash` compare configurations, as stereomolgraph's do (stereomol M3.1).
 """
 
 import itertools
@@ -144,6 +146,16 @@ _GROUP: dict[str, tuple[tuple[int, ...], ...]] = {
     ),
 }
 
+# The atom permutation that, with the parity negated, describes the same configuration
+# (stereomolgraph's `inversion`). An achiral kind (parity 0) has none.
+_INVERSION: dict[str, tuple[int, ...]] = {
+    "Tetrahedral": (0, 2, 1, 3, 4),
+    "AtropBond": (1, 0, 2, 3, 4, 5),
+}
+
+# The parity of a determined LS of each kind, before normalization.
+_DETERMINED_PARITY: dict[str, int] = {"Tetrahedral": 1, "PlanarBond": 0, "AtropBond": 1}
+
 # Permutation groups of an undetermined LS: every permutation that keeps its shape (the
 # centre first; for a bond, {a, b} stays on its end, which may swap with the other).
 _BOND_FULL_GROUP = tuple(
@@ -189,19 +201,23 @@ def invert[S: Tetrahedral | PlanarBond | AtropBond](ls: S) -> S:
     return _replace(ls, parity=-ls.parity)
 
 
-def isomers[S: Tetrahedral | PlanarBond | AtropBond](ls: S) -> tuple[S, S]:
-    """Both determined configurations of `ls`.
+def isomers[S: Tetrahedral | PlanarBond | AtropBond](ls: S) -> tuple[S, ...]:
+    """Every determined configuration of `ls`, in a fixed order.
 
-    The order doesn't depend on the configuration of `ls`: parity 1 before parity -1
-    for `Tetrahedral` and `AtropBond`, and the smaller atom tuple first for
-    `PlanarBond`.
+    The order doesn't depend on the configuration of `ls`: by atom tuple, then parity 1
+    before parity -1. A centre with a lone pair, or a bond end with one substituent,
+    still has two.
+
+    >>> [iso.parity for iso in isomers(Tetrahedral(atoms=(0, 1, 2, 3, 4)))]
+    [1, -1]
     """
-    if isinstance(ls, PlanarBond):
-        one = _replace(ls, parity=0)
-        one, two = sorted((one, invert(one)), key=lambda iso: _sort_key(iso.atoms))
-        return one, two
-    one = _replace(ls, parity=1)
-    return one, invert(one)
+    parity = _DETERMINED_PARITY[ls.kind]
+    configurations = {_rearranged(ls, perm, parity) for perm in _FULL_GROUP[ls.kind]}
+    return tuple(
+        sorted(
+            configurations, key=lambda iso: (_sort_key(iso.atoms), -(iso.parity or 0))
+        )
+    )
 
 
 def is_determined(ls: Tetrahedral | PlanarBond | AtropBond) -> bool:
@@ -223,17 +239,47 @@ def _replace[S: Tetrahedral | PlanarBond | AtropBond](ls: S, **update: object) -
     return type(ls).model_validate({**dict(ls), **update})
 
 
+def _rearranged[S: Tetrahedral | PlanarBond | AtropBond](
+    ls: S, perm: tuple[int, ...], parity: int | None
+) -> S:
+    """`ls` with its atoms permuted by `perm` and the given parity, validated."""
+    update: dict[str, object] = {"atoms": _permute(ls.atoms, perm), "parity": parity}
+    if not isinstance(ls, Tetrahedral) and _swaps_ends(ls, perm):
+        update["chain"] = ls.chain[::-1]
+    return _replace(ls, **update)
+
+
+def _swaps_ends(
+    ls: Tetrahedral | PlanarBond | AtropBond, perm: tuple[int, ...]
+) -> bool:
+    return not isinstance(ls, Tetrahedral) and perm[2] == 3  # noqa: PLR2004
+
+
 def _set_normal_form[S: Tetrahedral | PlanarBond | AtropBond](ls: S) -> S:
     """Put a just-validated LS in normal form, in place (used by the validators).
 
-    A determined LS takes the minimum over its group. An undetermined one takes it over
-    every permutation that keeps its shape, so that it has one normal form. A bond's
-    chain is reversed when its ends swap.
+    A determined LS takes the minimum over its group, and a chiral one also over its
+    group applied to the inverted atoms with the opposite parity. An undetermined one
+    takes it over every permutation that keeps its shape, so that it has one normal
+    form. A bond's chain is reversed when its ends swap.
     """
-    group = _GROUP[ls.kind] if is_determined(ls) else _FULL_GROUP[ls.kind]
-    perm = min(group, key=lambda perm: _sort_key(_permute(ls.atoms, perm)))
+    arrangements: list[tuple[tuple[int, ...], int | None]]
+    if not is_determined(ls):
+        arrangements = [(perm, ls.parity) for perm in _FULL_GROUP[ls.kind]]
+    else:
+        arrangements = [(perm, ls.parity) for perm in _GROUP[ls.kind]]
+        inversion = _INVERSION.get(ls.kind)
+        if inversion is not None and ls.parity:
+            arrangements += [
+                (_permute(inversion, perm), -ls.parity) for perm in _GROUP[ls.kind]
+            ]
+    perm, parity = min(
+        arrangements,
+        key=lambda arr: (_sort_key(_permute(ls.atoms, arr[0])), arr[1] or 0),
+    )
     # The model is frozen, and this runs inside its own validation
     object.__setattr__(ls, "atoms", _permute(ls.atoms, perm))
-    if not isinstance(ls, Tetrahedral) and perm[2] == 3:  # noqa: PLR2004  ends swap
+    object.__setattr__(ls, "parity", parity)
+    if not isinstance(ls, Tetrahedral) and _swaps_ends(ls, perm):
         object.__setattr__(ls, "chain", ls.chain[::-1])
     return ls

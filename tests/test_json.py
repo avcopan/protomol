@@ -108,8 +108,8 @@ def test_json_form() -> None:
                 },
                 "product": {
                     "kind": "Tetrahedral",
-                    "atoms": [0, 1, 2, 5, 4],
-                    "parity": 1,
+                    "atoms": [0, 1, 2, 4, 5],
+                    "parity": -1,
                 },
                 "ts": {
                     "kind": "Tetrahedral",
