@@ -24,6 +24,8 @@ False
 True
 >>> pm.stereo_at(gra, 0).parity        # a methyl C: trivial, so filled
 1
+>>> # in a notebook: "?" marks the undetermined C1
+>>> pm.display(gra)  # doctest: +SKIP
 
 ```
 
@@ -77,6 +79,8 @@ over through the channel's atom mapping:
 (((0, 3),), ((2, 3),))
 >>> pm.reactants(ts) == rct
 True
+>>> # the breaking C0-H3 in red, the forming O2-H3 in blue
+>>> pm.display(ts, atom_indices=True)  # doctest: +SKIP
 
 ```
 

@@ -3,6 +3,7 @@
 __version__ = "0.0.0"
 
 from ._ccv import ts_graphs
+from ._display import display
 from ._json import from_json, to_json
 from ._reaction import (
     products,
@@ -59,6 +60,7 @@ __all__ = [
     "StereoReactionGraph",
     "Tetrahedral",
     "TrigonalBipyramidal",
+    "display",
     "from_json",
     "from_smiles",
     "invert",

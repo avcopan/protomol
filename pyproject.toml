@@ -70,11 +70,13 @@ root_package = "protomol"
 name = "Module Layering"
 type = "layers"
 layers = [
-    "protomol._smiles",
+    "protomol._smiles | protomol._display",
     "protomol._backend | protomol._json",
     "protomol._types",
     "protomol._stereo",
 ]
+# `_repr_svg_` on the graph types draws with `_display`, imported inside the method
+ignore_imports = ["protomol._types -> protomol._display"]
 
 # Pytest configurations
 [tool.pytest.ini_options]

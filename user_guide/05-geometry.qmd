@@ -32,4 +32,5 @@ order is kept:
 
 ```python
 gra = pm.from_geometry(geo)       # a StereoMolGraph with the default (low-T) LS
+pm.display(gra, atom_indices=True)  # check what was perceived, in the geometry's atom order
 ```

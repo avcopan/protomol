@@ -18,7 +18,8 @@ stereomol will offer.
 ## Live and planned examples
 
 - **Live** examples are `>>>` blocks. pytest runs them as doctests (`--doctest-glob=*.qmd`)
-  in pre-commit, so they always match the code.
+  in pre-commit, so they always match the code. The `pm.display(...)` lines are skipped
+  (`# doctest: +SKIP`): they draw the graph in a notebook.
 - **Planned** examples are plain code blocks under a "Planned" callout naming the phase
   (see protomol's `PLAN.md` in the project notes). They use the names already planned. A
   name that is not yet planned is marked `# PROPOSED:`. AutoEngine and AutoStorage code that

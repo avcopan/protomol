@@ -163,6 +163,12 @@ class _Graph(BaseModel):
             _check_stereo(self)
         return self
 
+    def _repr_svg_(self) -> str:
+        """The drawing Jupyter shows for the graph (see `protomol.display`)."""
+        from ._display import _svg  # noqa: PLC0415  (_display imports this module)
+
+        return _svg(self)  # ty: ignore[invalid-argument-type]  (_Graph is one of the four)
+
 
 class MolGraph(_Graph):
     """A molecular graph: element symbols and bonds (pairs of atom indices).

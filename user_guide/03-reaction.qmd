@@ -90,6 +90,8 @@ graph leaves the axis undetermined, standing for either one:
 >>> change = pm.stereo_at(ts, (1, 2))
 >>> change.reactant == z, change.product == e, change.ts.parity
 (True, True, None)
+>>> # the C1-C2 bond, whose stereo changes, in magenta
+>>> pm.display(ts)  # doctest: +SKIP
 
 ```
 

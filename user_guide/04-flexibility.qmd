@@ -17,6 +17,7 @@ The charge, the spin and the neighbours are fields and functions today:
 (0, 1)
 >>> pm.neighbors(ch3, 0)
 (1, 2, 3)
+>>> pm.display(ch3)  # doctest: +SKIP
 
 ```
 

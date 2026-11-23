@@ -44,6 +44,8 @@ is a different graph:
 >>> hoh = pm.MolGraph(symbols=["H", "O", "H"], bonds=[(0, 1), (1, 2)])
 >>> hoh == gra
 False
+>>> # the atom indices show the order
+>>> pm.display(hoh, atom_indices=True)  # doctest: +SKIP
 
 ```
 
