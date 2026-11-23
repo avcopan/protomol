@@ -8,11 +8,22 @@ from pydantic import ValidationError
 import protomol as pm
 from protomol._stereo import _FULL_GROUP, _GROUP, _INVERSION
 
-type LS = pm.Tetrahedral | pm.PlanarBond | pm.AtropBond
+type LS = (
+    pm.Tetrahedral
+    | pm.SquarePlanar
+    | pm.TrigonalBipyramidal
+    | pm.Octahedral
+    | pm.PlanarBond
+    | pm.AtropBond
+)
 
 DETERMINED: list[LS] = [
     pm.Tetrahedral(atoms=(0, 4, 2, None, 1), parity=1),
     pm.Tetrahedral(atoms=(0, 4, 2, 3, 1), parity=-1),
+    pm.SquarePlanar(atoms=(0, 4, 2, 3, 1), parity=0),
+    pm.TrigonalBipyramidal(atoms=(0, 5, 3, 1, 2, 4), parity=1),
+    pm.TrigonalBipyramidal(atoms=(0, 5, None, 1, 2, 4), parity=-1),
+    pm.Octahedral(atoms=(0, 6, 2, 5, 3, 1, 4), parity=1),
     pm.PlanarBond(atoms=(8, None, 3, 1, 9, 5), parity=0),
     pm.PlanarBond(atoms=(8, 7, 3, 1, 9, 5), parity=0, chain=(10, 11)),
     pm.AtropBond(atoms=(8, 7, 3, 1, None, 5), parity=1),
@@ -26,7 +37,7 @@ UNDETERMINED: list[LS] = [
 def _rebuilt(ls: LS, perm: tuple[int, ...]) -> LS:
     """`ls` built again from its atom tuple permuted by `perm`."""
     data = {**dict(ls), "atoms": tuple(ls.atoms[i] for i in perm)}
-    if not isinstance(ls, pm.Tetrahedral) and perm[2] == 3:  # ends swap
+    if isinstance(ls, pm.PlanarBond | pm.AtropBond) and perm[2] == 3:  # ends swap
         data["chain"] = ls.chain[::-1]
     return type(ls).model_validate(data)
 
@@ -67,10 +78,16 @@ def test_normal_form_reverses_chain_with_the_ends() -> None:
     assert bond.chain == (11, 10)
 
 
-@pytest.mark.parametrize("ls", DETERMINED)
+@pytest.mark.parametrize("ls", [ls for ls in DETERMINED if ls.kind != "SquarePlanar"])
 def test_configurations_differ(ls: LS) -> None:
-    """The two configurations of a determined LS are not equal."""
+    """A determined LS and its inverse are not equal."""
     assert ls != pm.invert(ls)
+
+
+def test_square_planar_is_its_own_inverse() -> None:
+    """A square-planar centre is achiral: its mirror image is itself."""
+    ls = pm.SquarePlanar(atoms=(0, 4, 2, 3, 1), parity=0)
+    assert pm.invert(ls) == ls
 
 
 @pytest.mark.parametrize("ls", DETERMINED + UNDETERMINED)
@@ -86,12 +103,28 @@ def test_invert_undetermined_is_unchanged(ls: LS) -> None:
 
 
 @pytest.mark.parametrize("ls", DETERMINED + UNDETERMINED)
-def test_isomers_are_distinct_and_inverse(ls: LS) -> None:
-    """The two isomers differ, are each other's inverse, and keep the site."""
-    one, two = pm.isomers(ls)
-    assert one != two
-    assert pm.invert(one) == two
-    assert all(pm.site(iso) == pm.site(ls) for iso in (one, two))
+def test_isomers_are_distinct_and_closed_under_invert(ls: LS) -> None:
+    """The isomers differ, invert maps them onto each other, and they keep the site."""
+    isos = pm.isomers(ls)
+    assert len(set(isos)) == len(isos)
+    assert {pm.invert(iso) for iso in isos} == set(isos)
+    assert all(pm.site(iso) == pm.site(ls) for iso in isos)
+
+
+@pytest.mark.parametrize(
+    ("ls", "count"),
+    [
+        (pm.Tetrahedral(atoms=(0, 1, 2, 3, 4)), 2),
+        (pm.SquarePlanar(atoms=(0, 1, 2, 3, 4)), 3),
+        (pm.TrigonalBipyramidal(atoms=(0, 1, 2, 3, 4, 5)), 20),
+        (pm.Octahedral(atoms=(0, 1, 2, 3, 4, 5, 6)), 30),
+        (pm.PlanarBond(atoms=(1, 2, 3, 4, 5, 6)), 2),
+        (pm.AtropBond(atoms=(1, 2, 3, 4, 5, 6)), 2),
+    ],
+)
+def test_isomer_counts(ls: LS, count: int) -> None:
+    """The number of configurations with distinct atoms."""
+    assert len(pm.isomers(ls)) == count
 
 
 @pytest.mark.parametrize("ls", DETERMINED)

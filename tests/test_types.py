@@ -347,6 +347,35 @@ def test_reaction_ls_uses_the_bonds_of_its_side() -> None:
         )
 
 
+def test_trigonal_bipyramidal_ts_slot() -> None:
+    """The SN2 TS centre is five-coordinate: a TrigonalBipyramidal in the TS slot."""
+    tbp = pm.TrigonalBipyramidal(atoms=(0, 3, 5, 1, 2, 4), parity=1)
+    ts = _sn2(
+        stereo_changes=[
+            pm.StereoChange(
+                reactant=TET,
+                product=pm.Tetrahedral(atoms=(0, 1, 2, 4, 5), parity=-1),
+                ts=tbp,
+            )
+        ]
+    )
+    change = pm.stereo_at(ts, 0)
+    assert isinstance(change, pm.StereoChange)
+    assert change.ts == tbp
+    assert pm.from_json(pm.to_json(ts)) == ts
+
+
+def test_square_planar_neighbours_must_be_exact() -> None:
+    """A SquarePlanar lists exactly the centre's neighbours, like a Tetrahedral."""
+    ls = pm.SquarePlanar(atoms=(0, 1, 2, 3, 4), parity=0)
+    g = pm.StereoMolGraph(**CHIRAL, atom_stereo=[ls])
+    assert pm.stereo_at(g, 0) == ls
+    with pytest.raises(ValidationError, match="neighbours"):
+        pm.StereoMolGraph(
+            **CHIRAL, atom_stereo=[pm.SquarePlanar(atoms=(0, 1, 2, 3, None), parity=0)]
+        )
+
+
 def test_site_is_unchanged_or_changing_not_both() -> None:
     """A site is in the plain LS or the changes, not both."""
     with pytest.raises(ValidationError, match="both unchanged and changing"):

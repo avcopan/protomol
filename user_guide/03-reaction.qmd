@@ -43,23 +43,25 @@ configuration isn't chosen is an undetermined LS (`parity=None`), not `None`.
 
 SN2 at a stereocentre, I⁻ + CHFClBr → CHFClI + Br⁻ (atoms: C0, F1, Cl2, Br3, H4, I5).
 The centre's LS changes, so it is a `StereoChange`. Backside attack inverts the centre: I5
-takes the place of Br3 with the opposite parity. The TS slot is left out: its
-five-coordinate centre needs an LS type that protomol doesn't have yet.
+takes the place of Br3 with the opposite parity. At the TS the centre is five-coordinate,
+a `TrigonalBipyramidal` with I5 and Br3 axial. Its configuration follows from the
+reactant's; this graph leaves it undetermined, and `ts_graphs` (Phase 5) will fill it in.
 
 ```python
 >>> rct = pm.Tetrahedral(atoms=(0, 1, 2, 3, 4), parity=1)
 >>> prd = pm.Tetrahedral(atoms=(0, 1, 2, 5, 4), parity=-1)
+>>> tbp = pm.TrigonalBipyramidal(atoms=(0, 5, 3, 1, 2, 4))
 >>> ts = pm.StereoReactionGraph(
 ...     symbols=["C", "F", "Cl", "Br", "H", "I"],
 ...     bonds=[(0, 1), (0, 2), (0, 3), (0, 4), (0, 5)],
 ...     breaking=[(0, 3)],
 ...     forming=[(0, 5)],
 ...     charge=-1,
-...     stereo_changes=[pm.StereoChange(reactant=rct, product=prd)],
+...     stereo_changes=[pm.StereoChange(reactant=rct, product=prd, ts=tbp)],
 ... )
 >>> change = pm.stereo_at(ts, 0)
->>> change.reactant == rct, change.product == prd
-(True, True)
+>>> change.reactant == rct, change.product == prd, change.ts.kind
+(True, True, 'TrigonalBipyramidal')
 
 ```
 

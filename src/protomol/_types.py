@@ -43,17 +43,28 @@ from pydantic import (
 from rdkit import Chem
 
 from ._stereo import (
+    _ATOM_KINDS,
     AtomStereo,
     AtropBond,
     BondStereo,
+    Octahedral,
     PlanarBond,
+    SquarePlanar,
     StereoChange,
     Tetrahedral,
+    TrigonalBipyramidal,
 )
 from ._stereo import is_determined as _ls_is_determined
 from ._stereo import site as _ls_site
 
-type _LS = Tetrahedral | PlanarBond | AtropBond
+type _LS = (
+    Tetrahedral
+    | SquarePlanar
+    | TrigonalBipyramidal
+    | Octahedral
+    | PlanarBond
+    | AtropBond
+)
 type _Pair = tuple[int, int]
 type _Site = int | _Pair
 type _Adjacency = Mapping[int, Collection[int]]
@@ -306,7 +317,7 @@ def with_stereo(
     """
     reaction = isinstance(g, ReactionGraph | StereoReactionGraph)
     for item in items:
-        if not isinstance(item, Tetrahedral | PlanarBond | AtropBond | StereoChange):
+        if not isinstance(item, (*_ATOM_KINDS, PlanarBond, AtropBond, StereoChange)):
             msg = f"Expected an LS or a StereoChange, got {item!r}"
             raise TypeError(msg)
         if isinstance(item, StereoChange) and not reaction:
@@ -484,7 +495,7 @@ def _check_ls(ls: _LS, adjacency: _Adjacency, *, exact: bool) -> None:
     if missing:
         msg = f"LS {ls} has atoms {sorted(missing)} that are not in the graph"
         raise ValueError(msg)
-    if isinstance(ls, Tetrahedral):
+    if isinstance(ls, _ATOM_KINDS):
         center, *neighbors_ = ls.atoms
         _check_neighbors(ls, center, neighbors_, adjacency[center], exact=exact)
         return
@@ -532,7 +543,7 @@ def _check_neighbors(
 
 
 def _chain(ls: _LS) -> tuple[int, ...]:
-    return () if isinstance(ls, Tetrahedral) else ls.chain
+    return () if isinstance(ls, _ATOM_KINDS) else ls.chain
 
 
 def _site(item: _LS | StereoChange) -> _Site:
@@ -575,7 +586,7 @@ def _stereo_fields(
     """The stereo fields that hold `items` (the constructor sorts them)."""
     items = list(items)
     fields: dict[str, list[Any]] = {
-        "atom_stereo": [x for x in items if isinstance(x, Tetrahedral)],
+        "atom_stereo": [x for x in items if isinstance(x, _ATOM_KINDS)],
         "bond_stereo": [x for x in items if isinstance(x, PlanarBond | AtropBond)],
     }
     if reaction:
