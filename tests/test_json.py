@@ -9,11 +9,6 @@ from pydantic import BaseModel
 import protomol as pm
 from protomol import AnyGraph
 
-# Step 4 adds from_smiles; remove this mark then
-needs_smiles = pytest.mark.skipif(
-    not hasattr(pm, "from_smiles"), reason="from_smiles comes in Step 4"
-)
-
 CHIRAL: dict[str, Any] = {  # CHFClBr
     "symbols": ["C", "F", "Cl", "Br", "H"],
     "bonds": [(0, 1), (0, 2), (0, 3), (0, 4)],
@@ -46,11 +41,10 @@ ALL_TYPES = [
 ]
 
 
-@needs_smiles
 @pytest.mark.parametrize("smiles", ["C", "CO", "C[C@@H](O)/C=C/C", "[CH2]", "[NH4+]"])
 def test_round_trip(smiles: str) -> None:
     """from_json(to_json(g)) == g, and to_json is stable."""
-    g = pm.from_smiles(smiles)  # ty: ignore[missing-attribute]  Step 4
+    g = pm.from_smiles(smiles)
     string = pm.to_json(g)
     assert pm.from_json(string) == g
     assert pm.to_json(pm.from_json(string)) == string

@@ -3,6 +3,7 @@
 __version__ = "0.0.0"
 
 from ._json import from_json, to_json
+from ._smiles import from_smiles
 from ._stereo import (
     AtomStereo,
     AtropBond,
@@ -50,6 +51,7 @@ __all__ = [
     "Tetrahedral",
     "TrigonalBipyramidal",
     "from_json",
+    "from_smiles",
     "invert",
     "is_determined",
     "isomers",

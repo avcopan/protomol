@@ -8,37 +8,42 @@ graphs, one workflow each.
 
 ## A species: SMILES to stereoisomers
 
+`from_smiles` gives a stereo graph with every atom explicit: the SMILES atoms in SMILES
+order, then the implicit H in the order of the atoms they're bonded to. Stereo the SMILES
+leaves out stays undetermined, while sites whose two configurations give the same graph
+(the C of a methyl group) get a fixed parity:
+
+```python
+>>> import protomol as pm
+>>> gra = pm.from_smiles("CC(O)CC")    # butan-2-ol, centre not specified
+>>> gra.symbols[:5]
+('C', 'C', 'O', 'C', 'C')
+>>> pm.is_determined(gra)              # C1 has an undetermined Tetrahedral
+False
+>>> pm.stereo_at(gra, 1).parity is None
+True
+>>> pm.stereo_at(gra, 0).parity        # a methyl C: trivial, so filled
+1
+
+```
+
 ::: {.callout-note}
-Planned: Phase 1, Step 4 (`from_smiles`) and Phase 5 (`stereoisomers`).
+Planned: Phase 5 (`stereoisomers`).
 :::
 
 ```python
-import protomol as pm
-
-gra = pm.from_smiles("CC(O)CC")        # butan-2-ol, centre not specified
-pm.is_determined(gra)                  # False: C1 has an undetermined Tetrahedral
 for smg in pm.stereoisomers(gra):      # (R) and (S), as two determined graphs
     run_species_workflow(smg)          # ae, illustrative
 ```
 
-Until then, the same enumeration by hand, for a graph with one centre (CHFClBr):
+Until then, the same enumeration by hand, for the one undetermined centre:
 
 ```python
->>> import protomol as pm
->>> gra = pm.StereoMolGraph(
-...     symbols=["C", "F", "Cl", "Br", "H"],
-...     bonds=[(0, 1), (0, 2), (0, 3), (0, 4)],
-...     atom_stereo=[pm.Tetrahedral(atoms=(0, 1, 2, 3, 4))],
-... )
->>> pm.is_determined(gra)
-False
->>> ls = pm.stereo_at(gra, 0)
->>> ls.parity is None
-True
+>>> ls = pm.stereo_at(gra, 1)
 >>> isomers = [pm.with_stereo(gra, ls_) for ls_ in pm.isomers(ls)]
 >>> [pm.is_determined(smg) for smg in isomers]
 [True, True]
->>> [smg.atom_stereo[0].parity for smg in isomers]
+>>> [pm.stereo_at(smg, 1).parity for smg in isomers]
 [1, -1]
 >>> isomers[0] == isomers[1]
 False
@@ -48,8 +53,10 @@ False
 A species given with full stereo needs no expansion:
 
 ```python
-gra = pm.from_smiles("C[C@@H](O)/C=C/C")   # one stereoisomer of pent-3-en-2-ol
-pm.is_determined(gra)                       # True
+>>> gra = pm.from_smiles("C[C@@H](O)/C=C/C")   # one stereoisomer of pent-3-en-2-ol
+>>> pm.is_determined(gra)
+True
+
 ```
 
 ## A reaction: reactant and product SMILES to TS channels

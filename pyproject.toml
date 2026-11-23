@@ -70,7 +70,8 @@ root_package = "protomol"
 name = "Module Layering"
 type = "layers"
 layers = [
-    "protomol._json",
+    "protomol._smiles",
+    "protomol._backend | protomol._json",
     "protomol._types",
     "protomol._stereo",
 ]
