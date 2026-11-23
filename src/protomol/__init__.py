@@ -16,15 +16,21 @@ from ._stereo import (
     site,
 )
 from ._types import (
+    AnyGraph,
     GraphError,
     MolGraph,
     ReactionGraph,
     StereoMolGraph,
     StereoReactionGraph,
     is_determined,
+    neighbors,
+    remove_stereo,
+    stereo_at,
+    with_stereo,
 )
 
 __all__ = [
+    "AnyGraph",
     "AtomStereo",
     "AtropBond",
     "BondStereo",
@@ -41,6 +47,10 @@ __all__ = [
     "invert",
     "is_determined",
     "isomers",
+    "neighbors",
+    "remove_stereo",
     "site",
+    "stereo_at",
     "to_json",
+    "with_stereo",
 ]

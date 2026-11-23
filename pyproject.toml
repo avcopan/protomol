@@ -9,7 +9,7 @@ dependencies = [
     "more-itertools>=8",
     "networkx>=3.5",
     "numpy>=2.2",
-    "pydantic>=2.9",
+    "pydantic>=2.10",  # Field(default_factory=...) taking the validated data
     "rdkit>=2024.9.1",
     "typing-extensions>=4.12",
 ]
@@ -70,7 +70,9 @@ root_package = "protomol"
 name = "Module Layering"
 type = "layers"
 layers = [
-    "protomol._stereo | protomol._graph",
+    "protomol._json",
+    "protomol._types",
+    "protomol._stereo",
 ]
 
 # Pytest configurations
