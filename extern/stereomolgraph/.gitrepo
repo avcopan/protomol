@@ -5,8 +5,8 @@
 ;
 [subrepo]
 	remote = git@github.com:avcopan/StereoMolGraph.git
-	branch = fix-stereo-change-feasibility
-	commit = f514a537031bcaa1cd53d5b6b6ec15e7bf9ec8f5
-	parent = de933772c0107960eab600818f5552775a28c6e9
+	branch = protomol
+	commit = 20084a57b4efb0857f3b69f297a5bb256cb6f23d
+	parent = b819f4c2d39aa38d19cf6dcfd2b6529d6428248c
 	method = merge
 	cmdver = 0.4.9

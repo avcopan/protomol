@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- `AtropBond`'s permutation group: an end swap now keeps the helicity (the axis's C2),
+  so a 1,3-disubstituted allene or a symmetric twisted TS no longer equals its mirror
+  image. The normal form, and so the JSON, of an `AtropBond` may change. The vendored
+  stereomolgraph now tracks the fork's `protomol` branch, which has the same fix.
+
 ## [0.0.1] - 2026-11-23
 
 ### Added

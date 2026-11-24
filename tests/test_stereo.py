@@ -78,6 +78,29 @@ def test_normal_form_reverses_chain_with_the_ends() -> None:
     assert bond.chain == (11, 10)
 
 
+def test_atrop_bond_end_swap_keeps_the_helicity() -> None:
+    """A chiral axis's C2 maps (a, b, e1, e2, c, d) onto (d, c, e2, e1, b, a).
+
+    E.g. an allene with a = (1, 0, -1.5), b = (-1, 0, -1.5), e1 = (0, 0, -1),
+    e2 = (0, 0, 1), c = (0, -1, 1.5), d = (0, 1, 1.5), turned by (x, y, z) → (y, x, -z).
+    Swapping a and b in that image gives the mirror image.
+    """
+    ls = pm.AtropBond(atoms=(0, 1, 2, 3, 4, 5), parity=1)
+    assert pm.AtropBond(atoms=(5, 4, 3, 2, 1, 0), parity=1) == ls
+    assert pm.AtropBond(atoms=(4, 5, 3, 2, 0, 1), parity=1) == ls
+    assert pm.AtropBond(atoms=(4, 5, 3, 2, 1, 0), parity=1) == pm.invert(ls)
+
+
+@pytest.mark.parametrize("kind", sorted(_GROUP))
+def test_groups_match_the_back_end(kind: str) -> None:
+    """The permutation groups and inversions are stereomolgraph's (P14)."""
+    from protomol._vendor.stereomolgraph import stereodescriptors  # noqa: PLC0415
+
+    smg_cls = getattr(stereodescriptors, kind)
+    assert set(_GROUP[kind]) == set(smg_cls.PERMUTATION_GROUP)
+    assert _INVERSION.get(kind) == smg_cls.inversion
+
+
 @pytest.mark.parametrize("ls", [ls for ls in DETERMINED if ls.kind != "SquarePlanar"])
 def test_configurations_differ(ls: LS) -> None:
     """A determined LS and its inverse are not equal."""

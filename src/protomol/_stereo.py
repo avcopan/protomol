@@ -245,11 +245,14 @@ _GROUP: dict[str, tuple[tuple[int, ...], ...]] = {
         (4, 5, 3, 2, 0, 1),
         (5, 4, 3, 2, 1, 0),
     ),
+    # PlanarBond's group: a chiral axis's C2 maps (a, b, e1, e2, c, d) onto
+    # (d, c, e2, e1, b, a). The same as the back-end's since the fork's fix-atropbond
+    # branch (P45); before it, the end swaps were the mirror image.
     "AtropBond": (
         (0, 1, 2, 3, 4, 5),
         (1, 0, 2, 3, 5, 4),
-        (4, 5, 3, 2, 1, 0),
-        (5, 4, 3, 2, 0, 1),
+        (4, 5, 3, 2, 0, 1),
+        (5, 4, 3, 2, 1, 0),
     ),
 }
 
