@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 """Stress-test protomol's canonical form on RGD1 and stjohn-radicals.
 
 Run it in protomol's dev environment (it has protomol, autogeom and RDKit):
@@ -393,6 +392,10 @@ def run(args: argparse.Namespace) -> None:
     workers = min(args.workers, max(1, (os.cpu_count() or 3) - 2))
     done: set[str] = set()
     if out.exists():
+        # A run killed mid-write leaves a partial last line: cut it before appending.
+        data = out.read_bytes()
+        if data and not data.endswith(b"\n"):
+            out.write_bytes(data[: data.rfind(b"\n") + 1])
         with out.open() as handle:
             done = {json.loads(line)["id"] for line in handle if line.strip()}
 

@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 """Write the canonical stress-test report and its reproducers from a results file.
 
 Reads the JSON lines of `canonical_stress.py run` (no pyarrow needed) and writes
@@ -36,8 +35,10 @@ ROOT = Path(__file__).resolve().parent.parent
 
 def load(path: Path) -> list[dict[str, Any]]:
     """The rows of a results file."""
-    with path.open() as handle:
-        return [json.loads(line) for line in handle if line.strip()]
+    text = path.read_text()
+    if text and not text.endswith("\n"):  # a run still writing (or killed) mid-line
+        text = text[: text.rfind("\n") + 1]
+    return [json.loads(line) for line in text.splitlines() if line.strip()]
 
 
 # ------------------------------------------------------------------ classification

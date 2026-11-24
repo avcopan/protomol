@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 """Extract the RGD1 reactant/product geometries for the canonical stress test.
 
 Stage 1 of `canonical_stress.py`. It needs qccodec and the Gaussian plugin, which are not
