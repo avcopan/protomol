@@ -1,17 +1,22 @@
-"""`from_geometry`: between graphs and autogeom geometries (P4).
+"""`from_geometry` and `embed`: between graphs and autogeom geometries (P4).
 
-Atom i of the graph is atom i of the geometry. The LS sites are those `from_smiles`
-gives (the low-T approximation, through the same pipeline), and each site's parity is
-read from the coordinates.
+Atom i of the graph is atom i of the geometry. `from_geometry` takes the LS sites
+`from_smiles` gives (the low-T approximation, through the same pipeline) and reads each
+site's parity from the coordinates. `embed` runs RDKit's ETKDG on the graph's Lewis
+structure, with its determined LS as constraints, and checks the result with the same
+parity readers.
 """
 
 import numpy as np
 from autogeom import Geometry, adjacency_matrix, rd
 from autogeom.exc import GeometryConversionError
+from rdkit import Chem
+from rdkit.Chem import rdDistGeom
 
+from ._lewis import _lewis
 from ._smiles import _from_rdkit_mol
 from ._stereo import AtropBond, PlanarBond, Stereo, Tetrahedral
-from ._types import GraphError, StereoMolGraph, with_stereo
+from ._types import GraphError, MolGraph, StereoMolGraph, with_stereo
 from ._vendor.stereomolgraph.coords import handedness
 
 type _Coords = np.ndarray[tuple[int, int], np.dtype[np.float64]]
@@ -20,6 +25,13 @@ type _Vector = np.ndarray[tuple[int], np.dtype[np.float64]]
 # Below these, a centre is flat or a bond twisted by about 90° (no parity is read)
 _MIN_VOLUME = 0.3  # |det| of three unit-vector differences; ideal tetrahedron: 3.08
 _MIN_COSINE = 0.3  # |cos| (planar) or |sin| (axial) of the dihedral between the ends
+
+_EMBED_ATTEMPTS = 100  # ETKDG random seeds 0, 1, …
+_FRAGMENT_GAP = 3.0  # Å between the fragments of a disconnected graph, along x
+_FLIP_TAG = {
+    Chem.ChiralType.CHI_TETRAHEDRAL_CW: Chem.ChiralType.CHI_TETRAHEDRAL_CCW,
+    Chem.ChiralType.CHI_TETRAHEDRAL_CCW: Chem.ChiralType.CHI_TETRAHEDRAL_CW,
+}
 
 
 def from_geometry(geo: Geometry) -> StereoMolGraph:
@@ -54,6 +66,110 @@ def from_geometry(geo: Geometry) -> StereoMolGraph:
         raise GraphError(str(err)) from err
     gra = _from_rdkit_mol(mol, charge=geo.charge, spin=geo.spin)
     return _with_parities_from(gra, np.asarray(geo.coordinates, dtype=np.float64))
+
+
+def embed(gra: MolGraph | StereoMolGraph) -> Geometry:
+    """A 3D geometry of the graph, in its atom order, with its charge and spin.
+
+    RDKit's ETKDG embeds a Lewis structure of the graph (`_lewis`), with each determined
+    `Tetrahedral` (lone-pair centres included) as a chiral tag and each determined
+    `PlanarBond` on a double bond as cis/trans bond stereo. Every determined LS is then
+    read back from the coordinates, so `from_geometry(embed(gra))` has the same LS. An
+    LS ETKDG can't hold (a radical's planar bond, a chain LS) is met by embedding again
+    with the next random seed. Undetermined LS take whatever configuration comes out.
+    The seeds are fixed, so the result is reproducible. The fragments of a disconnected
+    graph are set 3 Å apart.
+
+    >>> from protomol import examples, from_geometry
+    >>> gra = examples.species()
+    >>> geo = embed(gra)
+    >>> geo.symbols == list(gra.symbols), geo.coordinates.shape
+    (True, (16, 3))
+    >>> from_geometry(geo) == gra
+    True
+
+    Raises:
+        TypeError: For a reaction graph.
+        GraphError: If no Lewis structure fits the graph, or no embedding meets its LS.
+    """
+    if not isinstance(gra, MolGraph | StereoMolGraph):
+        msg = f"embed takes a MolGraph or a StereoMolGraph, not {type(gra).__name__}"
+        raise TypeError(msg)
+    lss = (
+        [ls for ls in (*gra.atom_stereo, *gra.bond_stereo) if ls.parity is not None]
+        if isinstance(gra, StereoMolGraph)
+        else []
+    )
+    mol = Chem.RWMol(_lewis(gra))
+    tags = _set_stereo_tags(mol, lss)
+    for seed in range(_EMBED_ATTEMPTS):
+        params = rdDistGeom.ETKDGv3()
+        params.randomSeed = seed
+        if rdDistGeom.EmbedMolecule(mol, params) != 0:
+            continue
+        xyz = mol.GetConformer().GetPositions()
+        wrong = [ls for ls in lss if _ls_from_coords(ls, xyz) != ls]
+        if not wrong:
+            coords = _spread_fragments(mol, xyz)
+            return Geometry(
+                symbols=list(gra.symbols),
+                coordinates=coords,
+                charge=gra.charge,
+                spin=gra.spin,
+            )
+        # A tag whose centre came out inverted: RDKit's sense is the other one
+        for ls in wrong:
+            center = ls.atoms[0]
+            if isinstance(ls, Tetrahedral) and center in tags:
+                tags[center] = _FLIP_TAG[tags[center]]
+                mol.GetAtomWithIdx(center).SetChiralTag(tags[center])
+    msg = f"No embedding in {_EMBED_ATTEMPTS} attempts meets the LS of {gra}"
+    raise GraphError(msg)
+
+
+def _set_stereo_tags(mol: Chem.RWMol, lss: list[Stereo]) -> dict[int, Chem.ChiralType]:
+    """Tag `mol` for ETKDG: chiral tags on the centres, cis/trans on double bonds.
+
+    A chiral tag's sense depends on RDKit's neighbour order, so every centre starts
+    clockwise and `embed` flips the ones that come out inverted. Returns the tags.
+    """
+    tags = {}
+    for ls in lss:
+        if isinstance(ls, Tetrahedral):
+            tags[ls.atoms[0]] = Chem.ChiralType.CHI_TETRAHEDRAL_CW
+            mol.GetAtomWithIdx(ls.atoms[0]).SetChiralTag(tags[ls.atoms[0]])
+        elif isinstance(ls, PlanarBond) and not ls.chain:
+            a, b, end1, end2, c, d = ls.atoms
+            bond = mol.GetBondBetweenAtoms(end1, end2)
+            if bond is None or bond.GetBondType() != Chem.BondType.DOUBLE:
+                continue
+            # a is cis to c; with b or d in their place, the sense flips
+            x, x_flipped = (a, False) if a is not None else (b, True)
+            y, y_flipped = (c, False) if c is not None else (d, True)
+            if x is None or y is None:
+                continue
+            if bond.GetBeginAtomIdx() != end1:
+                x, y = y, x
+            bond.SetStereoAtoms(x, y)
+            bond.SetStereo(
+                Chem.BondStereo.STEREOCIS
+                if x_flipped == y_flipped
+                else Chem.BondStereo.STEREOTRANS
+            )
+    return tags
+
+
+def _spread_fragments(mol: Chem.Mol, xyz: _Coords) -> _Coords:
+    """Each fragment centred, then set along x with `_FRAGMENT_GAP` between them."""
+    coords = np.array(xyz, dtype=np.float64)
+    start = 0.0
+    for frag in Chem.GetMolFrags(mol):
+        idx = list(frag)
+        part = coords[idx] - coords[idx].mean(axis=0)
+        part[:, 0] += start - part[:, 0].min()
+        coords[idx] = part
+        start = part[:, 0].max() + _FRAGMENT_GAP
+    return coords
 
 
 def _with_parities_from(gra: StereoMolGraph, xyz: _Coords) -> StereoMolGraph:

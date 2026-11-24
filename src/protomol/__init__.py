@@ -7,7 +7,7 @@ from ._canon import canonical_form, canonical_json
 from ._ccv import ts_graphs
 from ._compare import deduplicate, isomorphism
 from ._display import display
-from ._geometry import from_geometry
+from ._geometry import embed, from_geometry
 from ._json import from_json, to_json
 from ._reaction import (
     products,
@@ -68,6 +68,7 @@ __all__ = [
     "canonical_json",
     "deduplicate",
     "display",
+    "embed",
     "examples",
     "from_geometry",
     "from_json",

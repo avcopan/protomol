@@ -73,7 +73,7 @@ type = "layers"
 layers = [
     "protomol._geometry",
     "protomol._smiles | protomol._display | protomol._canon | protomol._compare",
-    "protomol._backend | protomol._json",
+    "protomol._backend | protomol._json | protomol._lewis",
     "protomol._types",
     "protomol._stereo",
 ]

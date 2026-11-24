@@ -21,6 +21,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   autogeom's solver. The LS sites are the low-T ones `from_smiles` gives, and every
   parity is read from the coordinates (undetermined only for a flat centre or a double
   bond twisted by about 90°).
+- `embed(gra)`: an `autogeom.Geometry` of a `MolGraph` or `StereoMolGraph`, in its atom
+  order, from RDKit's ETKDG on a perceived Lewis structure (autogeom's solver, so
+  radicals work), with the determined LS as constraints. Every determined LS is checked
+  on the result, so `from_geometry(embed(gra)) == gra` for a determined graph. Fixed
+  seeds make it reproducible; fragments are set 3 Å apart.
 
 ### Changed
 

@@ -7,17 +7,29 @@ seeds a structure from the graph, and checks each structure it gets back against
 
 Geometries are autogeom's `Geometry`, which carries `charge` and `spin` too.
 
-::: {.callout-note}
-Planned: Phase 2 (`embed`) and Phase 3 (`stereo_matches`).
-:::
-
 ## Seeding a structure
 
+`embed` runs RDKit's ETKDG on a Lewis structure of the graph, with its determined LS as
+constraints, and keeps its atom order, charge and spin. Reading the structure back gives
+the same graph:
+
 ```python
-geo = pm.embed(smg)               # RDKit ETKDG, with the graph's stereo and atom order
+>>> import autogeom as ag
+>>> import protomol as pm
+>>> smg = pm.examples.species()
+>>> geo = pm.embed(smg)
+>>> isinstance(geo, ag.Geometry), geo.symbols == list(smg.symbols)
+(True, True)
+>>> pm.from_geometry(geo) == smg
+True
+
 ```
 
 ## Checking a structure
+
+::: {.callout-note}
+Planned: Phase 3 (`stereo_matches`).
+:::
 
 A conformer search or an optimization can invert a centre or flip a bond. A structure is
 kept only if it is still the workflow's stereoisomer:
@@ -33,8 +45,6 @@ order is kept. The LS sites are the low-T ones `from_smiles` gives, and every pa
 read from the coordinates, so the graph describes this structure atom for atom:
 
 ```python
->>> import autogeom as ag
->>> import protomol as pm
 >>> geo = ag.from_smiles(r"C[C@@H](O)/C=C/C")  # stands in for an outside structure
 >>> gra = pm.from_geometry(geo)
 >>> gra.symbols[:5], (gra.charge, gra.spin), pm.is_determined(gra)

@@ -12,8 +12,9 @@ AutoEngine: graph types for molecules and reactions with local stereodescriptors
 It has four immutable graph types (`MolGraph`, `StereoMolGraph`, `ReactionGraph`,
 `StereoReactionGraph`), which are frozen pydantic models; their local stereodescriptors
 (`Tetrahedral`, `PlanarBond`, `AtropBond`, …, and `StereoChange` for a reaction);
-`from_smiles`; a deterministic JSON form; the transition-state graphs of a reaction
-(`ts_graphs`); drawings in Jupyter; and three test graphs in `protomol.examples`.
+`from_smiles`; `from_geometry` and `embed`, to and from autogeom geometries; a
+deterministic JSON form; the transition-state graphs of a reaction (`ts_graphs`);
+drawings in Jupyter; and three test graphs in `protomol.examples`.
 
 ## Installation
 

@@ -1,4 +1,4 @@
-"""Tests for from_geometry: bonds, LS sites and parities read from an autogeom geometry.
+"""Tests for from_geometry and embed, between graphs and autogeom geometries.
 
 The geometries come from autogeom's RDKit embedding of a SMILES, which keeps the atom
 order `from_smiles` uses (heavy atoms as written, then the H in the order of their
@@ -134,3 +134,88 @@ def test_no_lewis_structure() -> None:
     geo = ag.Geometry(symbols=["C"], coordinates=[[0, 0, 0]], charge=0, spin=0)
     with pytest.raises(pm.GraphError, match="No Lewis structure"):
         pm.from_geometry(geo)
+
+
+# embed
+
+
+def _example_species() -> dict[str, pm.StereoMolGraph]:
+    """The species of the examples: the species and each TS's reactants and products."""
+    abstraction = pm.examples.abstraction_ts()
+    rotation = pm.examples.stereoisomerization_ts()
+    return {
+        "species": pm.examples.species(),
+        "abstraction_reactants": pm.reactants(abstraction),
+        "abstraction_products": pm.products(abstraction),
+        "rotation_reactants": pm.reactants(rotation),
+        "rotation_products": pm.products(rotation),
+    }
+
+
+@pytest.mark.parametrize(("name", "gra"), _example_species().items())
+def test_embed_round_trip(name: str, gra: pm.StereoMolGraph) -> None:
+    """from_geometry(embed(g)) is g, atom for atom (so the canonical JSON matches)."""
+    geo = pm.embed(gra)
+    assert geo.symbols == list(gra.symbols), name
+    assert (geo.charge, geo.spin) == (gra.charge, gra.spin)
+    back = pm.from_geometry(geo)
+    assert back == gra
+    assert pm.canonical_json(back) == pm.canonical_json(gra)
+
+
+@pytest.mark.parametrize(
+    "smiles",
+    [
+        *DETERMINED,
+        "CN(CC)CCC",  # a lone-pair centre
+        "CN(CC)CN(CC)CN(CC)C",  # three of them
+        "CC=C=CC",  # an allene axis, which ETKDG doesn't hold
+        "C=CC=CC=C",
+        "CC(C)(C)C",  # four trivial CH3 centres
+    ],
+)
+def test_embed_from_geometry_graphs(smiles: str) -> None:
+    """A determined graph read from a geometry embeds back to itself."""
+    gra = pm.from_geometry(ag.from_smiles(smiles))
+    assert pm.is_determined(gra)
+    assert pm.from_geometry(pm.embed(gra)) == gra
+
+
+def test_embed_each_configuration() -> None:
+    """Both enantiomers, and cis and trans, embed as given."""
+    for smiles in (r"C[C@@H](O)/C=C/C", r"C[C@H](O)/C=C\C", r"C[C@@H](O)/C=C\C"):
+        gra = pm.from_smiles(smiles)
+        assert pm.from_geometry(pm.embed(gra)) == gra
+
+
+def test_embed_fragments_apart() -> None:
+    """Fragments are embedded apart, so no bond is perceived between them."""
+    gra = pm.from_smiles("CC.[OH]")
+    assert pm.from_geometry(pm.embed(gra)) == gra
+
+
+def test_embed_reproducible() -> None:
+    """The seeds are fixed, so two calls give the same coordinates."""
+    gra = pm.examples.species()
+    np.testing.assert_array_equal(pm.embed(gra).coordinates, pm.embed(gra).coordinates)
+
+
+def test_embed_undetermined_and_plain() -> None:
+    """Undetermined LS and plain graphs embed; the bonds come back."""
+    undetermined = pm.from_smiles("CC(O)C=CC")
+    assert not pm.is_determined(undetermined)
+    assert pm.from_geometry(pm.embed(undetermined)).bonds == undetermined.bonds
+    plain = pm.without_stereo(pm.examples.species())
+    assert pm.from_geometry(pm.embed(plain)).bonds == plain.bonds
+
+
+def test_embed_reaction_graph() -> None:
+    """A reaction graph has no single geometry."""
+    with pytest.raises(TypeError, match="MolGraph or a StereoMolGraph"):
+        pm.embed(pm.examples.abstraction_ts())  # ty: ignore[invalid-argument-type]
+
+
+def test_embed_no_lewis_structure() -> None:
+    """A bare singlet C atom has no Lewis structure."""
+    with pytest.raises(pm.GraphError, match="No Lewis structure"):
+        pm.embed(pm.MolGraph(symbols=["C"], bonds=[]))
