@@ -29,7 +29,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
-- protomol depends on autogeom (from the `avcopan/automech` channel on prefix.dev).
+- protomol depends on autogeom 0.0.5 or later (from the `avcopan/automech` channel on
+  prefix.dev), whose Lewis solver keeps onium octets, so `from_geometry` keeps the C=O⁺ and
+  C=N⁺ `PlanarBond` of Criegee intermediates and nitrones.
 
 - `ts_graphs` compares and deduplicates its channels with `isomorphism` and
   `deduplicate`.

@@ -25,7 +25,24 @@ DETERMINED = [
     "C[N+](=O)[O-]",
     "C=C[CH2]",
     "[O][O]",
+    # Onium octets (autogeom 0.0.5): a + on C would lose the C=O+ / C=N+ PlanarBond
+    r"C/C=[O+]/[O-]",  # syn Criegee intermediate
+    r"C/C=[O+]\[O-]",  # anti
+    r"C=C/C=[O+]/[O-]",  # acrolein oxide
+    r"C/C=[N+](/[O-])C",  # a nitrone
 ]
+
+
+@pytest.mark.parametrize(
+    ("smiles", "bond"),
+    [("CC=[O+][O-]", (1, 2)), ("C=CC=[O+][O-]", (2, 3)), ("CC=[N+]([O-])C", (1, 2))],
+)
+def test_onium_planar_bond(smiles: str, bond: tuple[int, int]) -> None:
+    """The C=O+ or C=N+ bond of an onium zwitterion is a determined PlanarBond."""
+    gra = pm.from_geometry(ag.from_smiles(smiles))
+    ls = pm.stereo_at(gra, bond)
+    assert isinstance(ls, pm.PlanarBond)
+    assert ls.parity is not None
 
 
 def _permuted(geo: ag.Geometry, perm: np.ndarray) -> ag.Geometry:

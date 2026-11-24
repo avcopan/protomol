@@ -6,7 +6,7 @@ license = "MIT"
 license-files = ["LICENSE"]
 authors = [{name = "Andreas V. Copan", email = "avcopan@uga.edu"}]
 dependencies = [
-    "autogeom>=0.0.1",
+    "autogeom>=0.0.5",  # from_connectivity keeps onium octets (Criegee, nitrone)
     "more-itertools>=8",
     "networkx>=3.5",
     "numpy>=2.2",
