@@ -75,7 +75,11 @@ _ATOMIC_NUMBER = {_PERIODIC_TABLE.GetElementSymbol(z): z for z in range(1, 119)}
 
 
 class GraphError(ValueError):
-    """Invalid input to `from_json` (stereomol's GraphError)."""
+    """Invalid graph input (stereomol's GraphError).
+
+    Raised by `from_json`, and for graphs of mixed types given to `isomorphism` or
+    `deduplicate`.
+    """
 
 
 def _lowest_spin(data: dict[str, Any]) -> int:

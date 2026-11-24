@@ -61,6 +61,18 @@ True
 
 ```
 
+`isomorphism(g1, g2)` compares two graphs up to atom numbering (VF2++). It returns an
+atom map `m` with `relabel(g1, m) == g2`, or `None`, and `deduplicate` keeps the first
+graph of each isomorphism class:
+
+```python
+>>> pm.isomorphism(gra, hoh)
+(1, 0, 2)
+>>> pm.deduplicate([gra, hoh]) == [gra]
+True
+
+```
+
 ## Canonical form
 
 `canonical_form(gra)` returns the canonical graph and the atom map to it: atom k of the

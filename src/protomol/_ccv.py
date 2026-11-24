@@ -17,14 +17,13 @@ import networkx as nx
 from networkx.algorithms.isomorphism import GraphMatcher
 from rdkit import Chem
 
-from ._backend import to_smg
+from ._compare import deduplicate, isomorphism
 from ._reaction import products as _products
 from ._reaction import reactants as _reactants
 from ._reaction import reaction_graph, relabel, reverse
 from ._stereo import AtropBond, PlanarBond, StereoChange, Tetrahedral, isomers
 from ._types import (
     _LS,
-    AnyGraph,
     GraphError,
     MolGraph,
     ReactionGraph,
@@ -101,9 +100,10 @@ def ts_graphs(
             for gra, _ in _CCV(reactants, products).results(extra_breaks=extra_breaks)
         ]
     assert isinstance(products, StereoMolGraph)  # noqa: S101 (for the type checker)
-    if _is_isomorphic(_nx(reactants), _nx(products)) and _frozen_smg(
-        reactants
-    ) != _frozen_smg(products):
+    if (
+        _is_isomorphic(_nx(reactants), _nx(products))
+        and isomorphism(reactants, products) is None
+    ):
         rotations = _no_bond_change_channels(reactants, products)
         if rotations:
             return rotations
@@ -134,8 +134,7 @@ def _no_bond_change_channels(
     stereo-isomorphic: a trivial LS (a terminal =CH2) would otherwise give a rotation.
     """
     unchanged = reaction_graph(reactants, reactants)
-    want = _frozen_smg(products)
-    found: dict[object, StereoReactionGraph] = {}
+    found: list[StereoReactionGraph] = []
     for ls in (*reactants.atom_stereo, *reactants.bond_stereo):
         if ls.parity is None or not (
             isinstance(ls, PlanarBond | AtropBond)
@@ -146,9 +145,9 @@ def _no_bond_change_channels(
             if alt == ls:
                 continue
             cand = with_stereo(unchanged, StereoChange(reactant=ls, product=alt))
-            if _frozen_smg(_products(cand)) == want:
-                found.setdefault(_frozen_smg(cand), cand)
-    return list(found.values())
+            if isomorphism(_products(cand), products) is not None:
+                found.append(cand)
+    return deduplicate(found)
 
 
 def _stereo_channels(
@@ -176,14 +175,15 @@ def _stereo_channels(
         else:
             untouched.append(item)
 
-    want = (_frozen_smg(reactants), _frozen_smg(products))
-    found: dict[object, StereoReactionGraph] = {}
+    found: list[StereoReactionGraph] = []
     for changes in itertools.product(*touched):
         cand = with_stereo(srg, *untouched, *changes)
-        sides = (_frozen_smg(_reactants(cand)), _frozen_smg(_products(cand)))
-        if sides == want:
-            found.setdefault(_frozen_smg(cand), cand)
-    return list(found.values())
+        if (
+            isomorphism(_reactants(cand), reactants) is not None
+            and isomorphism(_products(cand), products) is not None
+        ):
+            found.append(cand)
+    return deduplicate(found)
 
 
 def _touches(change: StereoChange, reacting: set[int]) -> bool:
@@ -215,13 +215,6 @@ def _change_configurations(change: StereoChange) -> list[StereoChange]:
         StereoChange(reactant=r, product=p, ts=change.ts)
         for r, p in itertools.product(*sides)
     ]
-
-
-def _frozen_smg(gra: AnyGraph) -> object:
-    """The frozen stereomolgraph graph (hash and `==`: stereo-aware isomorphism)."""
-    smg = to_smg(gra)
-    smg.freeze()
-    return smg
 
 
 @dataclass(frozen=True)

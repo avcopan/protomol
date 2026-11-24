@@ -12,6 +12,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `atom_map[k]` the input index of canonical atom k (a tuple), and `canonical_json(gra)`,
   the JSON of the canonical graph. The numbering is stereomolgraph's `canon_atom_num`;
   it doesn't see chain LS yet.
+- `isomorphism(g1, g2)`: an atom map `m` with `relabel(g1, m) == g2`, or `None`
+  (stereomolgraph's VF2++, comparing stereo, breaking and forming bonds, stereo changes,
+  charge and spin), and `deduplicate(graphs)`: the first graph of each isomorphism class,
+  in input order.
+
+### Changed
+
+- `ts_graphs` compares and deduplicates its channels with `isomorphism` and
+  `deduplicate`.
 
 ### Fixed
 

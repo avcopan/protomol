@@ -10,6 +10,7 @@ warning.
 """
 
 import warnings
+from dataclasses import dataclass
 from typing import Any
 
 from ._stereo import (
@@ -30,6 +31,15 @@ from ._types import (
 )
 from ._vendor.stereomolgraph import stereodescriptors as smg_ls
 from ._vendor.stereomolgraph.algorithms.canon import canon_atom_num
+from ._vendor.stereomolgraph.algorithms.circular import (
+    color_refine_crg,
+    color_refine_mg,
+    color_refine_scrg,
+    color_refine_smg,
+    label_hash,
+    numpy_int_multiset_hash,
+)
+from ._vendor.stereomolgraph.algorithms.isomorphism import vf2pp_all_isomorphisms
 from ._vendor.stereomolgraph.graphs.crg import Change
 from ._vendor.stereomolgraph.graphs.crg import CondensedReactionGraph as _SmgCRG
 from ._vendor.stereomolgraph.graphs.mg import MolGraph as _SmgMG
@@ -143,6 +153,69 @@ def canon_numbering(gra: AnyGraph) -> tuple[int, ...]:
         return ()
     numbers = canon_atom_num(to_smg(gra))
     return tuple(sorted(numbers, key=numbers.__getitem__))
+
+
+@dataclass(frozen=True)
+class Matchable:
+    """A graph ready for VF2++: its back-end graph and colour refinement, built once."""
+
+    smg: Any
+    colors: Any  # the back-end's colour array (one int per atom)
+    stereo: bool
+    reaction: bool
+
+    @property
+    def fingerprint(self) -> int:
+        """The multiset hash of the colours (the back-end's `__hash__`).
+
+        Equal for isomorphic graphs; unequal graphs may collide. Not a canonical form.
+        """
+        if not len(self.colors):
+            return 0
+        return int(numpy_int_multiset_hash(self.colors))
+
+
+def matchable(gra: AnyGraph) -> Matchable:
+    """`gra` prepared for `vf2pp`, with the labels the back-end's `__eq__` uses."""
+    reaction = isinstance(gra, ReactionGraph | StereoReactionGraph)
+    stereo = isinstance(gra, StereoMolGraph | StereoReactionGraph)
+    smg = to_smg(gra)
+    if not gra.symbols:
+        colors: Any = ()
+    else:
+        refine = {
+            (False, False): color_refine_mg,
+            (False, True): color_refine_smg,
+            (True, False): color_refine_crg,
+            (True, True): color_refine_scrg,
+        }[reaction, stereo]
+        labels = ("atom_type", "reaction") if reaction else ("atom_type",)
+        colors = refine(smg, atom_labels=label_hash(smg, atom_labels=labels))
+    return Matchable(smg=smg, colors=colors, stereo=stereo, reaction=reaction)
+
+
+def vf2pp(first: Matchable, second: Matchable) -> tuple[int, ...] | None:
+    """One isomorphism `m` with atom k of `second` = atom `m[k]` of `first`, or None.
+
+    The back-end's `vf2pp_all_isomorphisms`, comparing the LS (stereo types) and the
+    stereo changes (`StereoReactionGraph`), as the back-end's `__eq__` does. Breaking
+    and forming bonds take part through the colours.
+    """
+    if len(first.colors) != len(second.colors):
+        return None
+    if not len(first.colors):
+        return ()
+    for iso in vf2pp_all_isomorphisms(
+        first.smg,
+        second.smg,
+        atom_labels=(first.colors, second.colors),
+        stereo=first.stereo,
+        stereo_change=first.stereo and first.reaction,
+        subgraph=False,
+    ):
+        inverse = {b: a for a, b in iso.items()}
+        return tuple(inverse[k] for k in range(len(inverse)))
+    return None
 
 
 def _add_bonds(smg: Any, gra: AnyGraph) -> None:  # noqa: ANN401
