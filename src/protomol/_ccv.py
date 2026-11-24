@@ -17,15 +17,22 @@ import networkx as nx
 from networkx.algorithms.isomorphism import GraphMatcher
 from rdkit import Chem
 
+from ._backend import to_smg
+from ._reaction import products as _products
 from ._reaction import reactants as _reactants
 from ._reaction import reaction_graph, relabel, reverse
+from ._stereo import StereoChange, isomers
 from ._types import (
+    _LS,
+    AnyGraph,
     GraphError,
     MolGraph,
     ReactionGraph,
     StereoMolGraph,
     StereoReactionGraph,
     _nx,
+    _site,
+    with_stereo,
 )
 
 type _Pair = tuple[int, int]
@@ -50,10 +57,14 @@ def ts_graphs(
 ) -> list[ReactionGraph] | list[StereoReactionGraph]:
     """The topologically distinct TS channels from reactants to products (CCV).
 
-    Each graph is in the reactants' atom order. With stereo inputs, each channel's
-    product LS are carried over through its atom mapping (the first one found, when
-    equivalent atoms give several). Fleeting stereo and stereo channels come in
-    Phase 5.
+    Each graph is in the reactants' atom order. With stereo inputs, the channels are
+    the stereo-distinct ones whose two sides are the given reactants and products
+    (stereo-aware isomorphism): each topological channel's LS are enumerated at the
+    sites its reaction touches, so diastereotopic atoms give separate channels (the two
+    H of C3 in (R)-butan-2-ol, say). Every other LS stays unchanged; only if no
+    enumeration matches the inputs may one of them change, then two, and so on (least
+    motion), so a (Z) → (E) rotation keeps its one change and an unreacting CH3 is
+    never inverted. The `ts` slots stay empty: fleeting stereo comes in Phase 5.
 
     `extra_breaks` is the most bonds the search breaks and re-forms beyond those the
     bond counts require.
@@ -85,9 +96,117 @@ def ts_graphs(
     assert isinstance(products, StereoMolGraph)  # noqa: S101 (for the type checker)
     n = len(reactants.symbols)
     return [
-        reaction_graph(reactants, relabel(products, [mapping[k] for k in range(n)]))
+        srg
         for _, mapping in results
+        for srg in _stereo_channels(
+            reactants,
+            products,
+            reaction_graph(
+                reactants, relabel(products, [mapping[k] for k in range(n)])
+            ),
+        )
     ]
+
+
+def _stereo_channels(
+    reactants: StereoMolGraph, products: StereoMolGraph, srg: StereoReactionGraph
+) -> list[StereoReactionGraph]:
+    """The stereo-distinct versions of one channel whose sides match the inputs.
+
+    `srg` is the channel with one atom mapping. The changes at the sites its reaction
+    touches (its centre, or a bond's end, is in a breaking or forming bond) get every
+    configuration on each side; a side whose LS is undetermined stays undetermined.
+    The other sites keep their reactant LS on both sides, unless no enumeration
+    matches, in which case the fewest of them get another product LS (`_inverted`);
+    `srg` itself bounds that number.
+    Candidates are deduplicated, as in stereomolgraph's `generate_stereoisomers`, by
+    frozen stereomolgraph graphs, whose hash and `==` are stereo-aware isomorphism.
+    """
+    reacting = {atom for bond in (*srg.breaking, *srg.forming) for atom in bond}
+    touched: list[list[StereoChange]] = []
+    untouched: list[_LS] = []
+    for item in (*srg.atom_stereo, *srg.bond_stereo, *srg.stereo_changes):
+        if isinstance(item, StereoChange):
+            if _touches(item, reacting):
+                touched.append(_change_configurations(item))
+            elif item.reactant is not None:
+                untouched.append(item.reactant)
+        else:
+            untouched.append(item)
+
+    # `srg` itself is a candidate with this many inversions, so the search ends there
+    most = sum(
+        not _touches(item, reacting)
+        for item in srg.stereo_changes
+        if item.reactant is not None
+    )
+    want = (_frozen_smg(reactants), _frozen_smg(products))
+    for count in range(most + 1):
+        found: dict[object, StereoReactionGraph] = {}
+        for inverted in _inverted(untouched, count):
+            sites = {_site(change) for change in inverted}
+            kept = [ls for ls in untouched if _site(ls) not in sites]
+            for changes in itertools.product(*touched):
+                cand = with_stereo(srg, *kept, *inverted, *changes)
+                sides = (_frozen_smg(_reactants(cand)), _frozen_smg(_products(cand)))
+                if sides == want:
+                    found.setdefault(_frozen_smg(cand), cand)
+        if found:
+            return list(found.values())
+    return []
+
+
+def _touches(change: StereoChange, reacting: set[int]) -> bool:
+    """Whether a change is structural, not a pure inversion.
+
+    It is if its site (its centre, or a bond's ends) is a reacting atom, or if its LS
+    has no counterpart on the other side, or other atoms there (a double bond that
+    moves, say).
+    """
+    r, p = change.reactant, change.product
+    if r is None or p is None or set(r.atoms) != set(p.atoms):
+        return True
+    site = _site(change)
+    return any(
+        atom in reacting for atom in ((site,) if isinstance(site, int) else site)
+    )
+
+
+def _change_configurations(change: StereoChange) -> list[StereoChange]:
+    """Every configuration of a change's reactant and product LS (`ts` kept).
+
+    A side whose LS is undetermined keeps it undetermined.
+    """
+    sides = [
+        [ls] if ls is None or ls.parity is None else list(isomers(ls))
+        for ls in (change.reactant, change.product)
+    ]
+    return [
+        StereoChange(reactant=r, product=p, ts=change.ts)
+        for r, p in itertools.product(*sides)
+    ]
+
+
+def _inverted(untouched: list[_LS], count: int) -> Iterator[list[StereoChange]]:
+    """Each way to give `count` untouched LS another product configuration.
+
+    Undetermined LS are never changed.
+    """
+    changeable = [ls for ls in untouched if ls.parity is not None]
+    for chosen in itertools.combinations(changeable, count):
+        others = [[iso for iso in isomers(ls) if iso != ls] for ls in chosen]
+        for alternatives in itertools.product(*others):
+            yield [
+                StereoChange(reactant=ls, product=alt)
+                for ls, alt in zip(chosen, alternatives, strict=True)
+            ]
+
+
+def _frozen_smg(gra: AnyGraph) -> object:
+    """The frozen stereomolgraph graph (hash and `==`: stereo-aware isomorphism)."""
+    smg = to_smg(gra)
+    smg.freeze()
+    return smg
 
 
 @dataclass(frozen=True)
