@@ -5,8 +5,8 @@
 ;
 [subrepo]
 	remote = git@github.com:avcopan/StereoMolGraph.git
-	branch = canon
-	commit = 097f0d12f32a2702975fe17f3820bc1533cb06a8
-	parent = a6157aac0797af60e593c5405b827261a7cfab11
+	branch = fix-stereo-change-feasibility
+	commit = f514a537031bcaa1cd53d5b6b6ec15e7bf9ec8f5
+	parent = de933772c0107960eab600818f5552775a28c6e9
 	method = merge
 	cmdver = 0.4.9
