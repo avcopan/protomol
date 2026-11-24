@@ -163,12 +163,15 @@ def relabel[G: (MolGraph, StereoMolGraph, ReactionGraph, StereoReactionGraph)](
 ) -> G:
     """The graph with atom k of the result = atom `atom_map[k]` of `gra`.
 
-    Same direction as AutoStorage's link `atom_map` (P22), so
-    `relabel(canonical, atom_map)` gives back the user's graph.
+    Same direction as AutoStorage's link `atom_map` (P22), whose `atom_map[k]` is the
+    input index of canonical atom k: `relabel(gra, atom_map)` gives the canonical
+    graph, and the inverse map (`numpy.argsort(atom_map)`) gives `gra` back.
 
     >>> g = MolGraph(symbols=["O", "H", "H"], bonds=[(0, 1), (0, 2)])
     >>> relabel(g, [2, 0, 1])
     MolGraph(symbols=('H', 'O', 'H'), bonds=((0, 1), (1, 2)), charge=0, spin=0)
+    >>> relabel(relabel(g, [2, 0, 1]), [1, 2, 0]) == g  # [1, 2, 0] is the inverse
+    True
 
     Raises:
         ValueError: If `atom_map` is not a permutation of the atoms.

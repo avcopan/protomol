@@ -50,10 +50,13 @@ False
 ```
 
 `relabel(gra, atom_map)` reorders the atoms: atom k of the result is atom `atom_map[k]` of
-`gra`, the direction of AutoStorage's link `atom_map`:
+`gra`, the direction of AutoStorage's link `atom_map` (canonical atom k is input atom
+`atom_map[k]`). The inverse map, `np.argsort(atom_map)`, undoes it:
 
 ```python
 >>> pm.relabel(gra, [1, 0, 2]) == hoh
+True
+>>> pm.relabel(hoh, [1, 0, 2]) == gra  # [1, 0, 2] is its own inverse
 True
 
 ```
@@ -65,8 +68,11 @@ Planned: Phase 3 (`canonical_form`, `canonical_json`, `low_t`, `high_t`).
 :::
 
 ```python
+import numpy as np
+
 can, atom_map = pm.canonical_form(gra)   # atom k of `can` is atom atom_map[k] of `gra`
-pm.relabel(can, atom_map) == gra         # True: the input graph is recoverable
+pm.relabel(gra, atom_map) == can         # True: atom_map is the relabelling
+pm.relabel(can, np.argsort(atom_map)) == gra   # True: its inverse recovers the input
 pm.canonical_json(gra)                   # the string AutoStorage stores
 ```
 
