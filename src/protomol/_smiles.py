@@ -1,21 +1,34 @@
 """`from_smiles`: RDKit parses, stereomolgraph perceives the LS (P7, P16).
 
-protomol then adds the lone-pair LS of sp3 amine N (a Phase 1 approximation of the
-low-T scheme), fills in the trivial sites, and checks charge and spin.
+protomol then puts one chain LS on each cumulated chain (P15), adds the lone-pair LS of
+sp3 amine N (a Phase 1 approximation of the low-T scheme), fills in the trivial sites,
+and checks charge and spin.
 """
 
+import itertools
+
+import networkx as nx
 from pydantic import ValidationError
 from rdkit import Chem
 
 from ._backend import from_smg, to_smg
-from ._stereo import Tetrahedral, isomers
-from ._types import GraphError, StereoMolGraph, with_stereo
+from ._stereo import AtropBond, PlanarBond, Tetrahedral, isomers
+from ._types import (
+    GraphError,
+    StereoMolGraph,
+    _nx,
+    neighbors,
+    remove_stereo,
+    stereo_at,
+    with_stereo,
+)
 from ._vendor.stereomolgraph.rdmol2graph import RDMol2StereoMolGraph
 
 _RDMOL_TO_SMG = RDMol2StereoMolGraph(
     resonance=True, lone_pair_stereo=True, stereo_complete=False
 )
 _AMINE_N_NEIGHBORS = 3
+_CHAIN_END_SUBSTITUENTS = 2
 
 
 def from_smiles(
@@ -28,7 +41,9 @@ def from_smiles(
 
     Stereo uses the low-T scheme. Sites whose two configurations give the same graph get
     a fixed parity. Stereo elements the SMILES leaves unspecified stay undetermined
-    (parity None) until `stereoisomers`.
+    (parity None) until `stereoisomers`. A cumulated chain gets one LS on its ends, a
+    `PlanarBond` or an `AtropBond` with the inner atoms as its `chain`; RDKit doesn't
+    read allene stereo, so it is never determined by the SMILES.
 
     >>> gra = from_smiles("[H]OC")
     >>> gra.symbols
@@ -70,10 +85,88 @@ def from_smiles(
     try:
         gra = from_smg(_RDMOL_TO_SMG(mol), charge=formal_charge, spin=spin)
         assert isinstance(gra, StereoMolGraph)  # noqa: S101  (narrows the type)
+        for chain in _cumulated_chains(mol):
+            gra = _with_chain_stereo(gra, chain)
         gra = with_stereo(gra, *_amine_lss(mol, gra))
         return _fill_trivial_sites(gra)
     except ValidationError as err:
         raise GraphError(str(err)) from err
+
+
+def _cumulated_chains(mol: Chem.Mol) -> list[tuple[int, ...]]:
+    """The maximal paths end1, inner…, end2 of ≥ 2 cumulated double bonds.
+
+    Inner atoms have two neighbours and two double bonds each, in the Kekulé form of
+    `mol`. A path runs from its lower-numbered end; the paths are sorted.
+    """
+    kekule = Chem.Mol(mol)
+    Chem.Kekulize(kekule, clearAromaticFlags=True)
+    double = nx.Graph()
+    double.add_edges_from(
+        (bond.GetBeginAtomIdx(), bond.GetEndAtomIdx())
+        for bond in kekule.GetBonds()
+        if bond.GetBondType() == Chem.BondType.DOUBLE
+    )
+    inner = {
+        atom.GetIdx()
+        for atom in kekule.GetAtoms()
+        if atom.GetDegree() == 2  # noqa: PLR2004
+        and double.has_node(atom.GetIdx())
+        and double.degree(atom.GetIdx()) == 2  # noqa: PLR2004
+    }
+    chains = []
+    for component in nx.connected_components(double.subgraph(inner)):
+        outer = {j for i in component for j in double[i]} - component
+        if len(outer) != 2:  # noqa: PLR2004  (a ring of cumulated double bonds)
+            continue
+        end1, end2 = sorted(outer)
+        chains.append(
+            tuple(nx.shortest_path(double.subgraph(component | outer), end1, end2))
+        )
+    return sorted(chains)
+
+
+def _chain_stereo(
+    gra: StereoMolGraph, chain: tuple[int, ...]
+) -> PlanarBond | AtropBond | None:
+    """The LS of a chain, or None if either end has fewer than two substituents.
+
+    A `PlanarBond` for an odd number of double bonds, an `AtropBond` for even. The LS
+    is undetermined, since RDKit doesn't read allene or cumulene stereo from a SMILES.
+    """
+    end1, *inner, end2 = chain
+    subs = [
+        tuple(i for i in neighbors(gra, end) if i != next_)
+        for end, next_ in ((end1, chain[1]), (end2, chain[-2]))
+    ]
+    if any(len(sub) != _CHAIN_END_SUBSTITUENTS for sub in subs):
+        return None
+    (a, b), (c, d) = subs
+    kind = PlanarBond if len(inner) % 2 == 0 else AtropBond
+    return kind(atoms=(a, b, end1, end2, c, d), chain=tuple(inner))
+
+
+def _with_chain_stereo(gra: StereoMolGraph, chain: tuple[int, ...]) -> StereoMolGraph:
+    """`gra` with the per-bond LS on the chain's bonds replaced by the chain LS.
+
+    The chain LS gets its first isomer if the chain is trivial: if either end's two
+    substituents are equivalent. "Equivalent" is approximated by equal
+    Weisfeiler-Lehman hashes of the stereo-free graph; the exact test comes with the
+    canonical form (Phase 3).
+    """
+    for bond in itertools.pairwise(chain):
+        if stereo_at(gra, bond) is not None:
+            gra = remove_stereo(gra, bond)
+    ls = _chain_stereo(gra, chain)
+    if ls is None:
+        return gra
+    a, b, _, _, c, d = ls.atoms
+    hashes = nx.weisfeiler_lehman_subgraph_hashes(
+        _nx(gra), node_attr="symbol", iterations=len(gra.symbols)
+    )
+    if hashes[a][-1] == hashes[b][-1] or hashes[c][-1] == hashes[d][-1]:
+        ls = isomers(ls)[0]
+    return with_stereo(gra, ls)
 
 
 def _amine_lss(mol: Chem.Mol, gra: StereoMolGraph) -> list[Tetrahedral]:
@@ -104,13 +197,19 @@ def _fill_trivial_sites(gra: StereoMolGraph) -> StereoMolGraph:
 
     A site is trivial when all its configurations give the same graph (stereomolgraph's
     stereo-aware isomorphism), each tested on `gra` with the other sites as they are.
+    stereomolgraph can't hold a chain LS, so the chain LS are left out of the test and
+    are never filled here (`_with_chain_stereo` fills the trivial ones).
     """
+    chain_free = gra
+    for ls in gra.bond_stereo:
+        if ls.chain:
+            chain_free = remove_stereo(chain_free, ls.atoms[2:4])
     trivial = []
-    for ls in (*gra.atom_stereo, *gra.bond_stereo):
+    for ls in (*chain_free.atom_stereo, *chain_free.bond_stereo):
         if ls.parity is not None:
             continue
         isos = isomers(ls)
-        smg0, *smgs = (to_smg(with_stereo(gra, iso)) for iso in isos)
+        smg0, *smgs = (to_smg(with_stereo(chain_free, iso)) for iso in isos)
         if all(smg == smg0 for smg in smgs):
             trivial.append(isos[0])
     return with_stereo(gra, *trivial)

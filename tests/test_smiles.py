@@ -168,6 +168,78 @@ def test_amide_and_aniline_n_have_no_lone_pair_stereo(smiles: str) -> None:
 # The back end (private)
 
 
+def _from_smiles_quietly(smiles: str) -> pm.StereoMolGraph:
+    """from_smiles, failing on any warning (no chain LS may reach stereomolgraph)."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        return pm.from_smiles(smiles)
+
+
+def test_allene_is_trivial() -> None:
+    """C=C=C: one determined AtropBond on (0, 2) with chain (1,)."""
+    g = _from_smiles_quietly("C=C=C")
+    assert len(g.bond_stereo) == 1
+    ls = pm.stereo_at(g, (0, 2))
+    assert isinstance(ls, pm.AtropBond)
+    assert ls.chain == (1,)
+    assert ls.parity is not None
+
+
+def test_dimethylallene_is_undetermined() -> None:
+    """CC=C=CC: an undetermined AtropBond on (1, 3) with chain (2,)."""
+    g = _from_smiles_quietly("CC=C=CC")
+    assert len(g.bond_stereo) == 1
+    ls = pm.stereo_at(g, (1, 3))
+    assert isinstance(ls, pm.AtropBond)
+    assert ls.chain == (2,)
+    assert ls.parity is None
+
+
+def test_butatriene_gets_planar_chain() -> None:
+    """CC=C=C=CC: an undetermined PlanarBond on (1, 4) with chain (2, 3)."""
+    g = _from_smiles_quietly("CC=C=C=CC")
+    assert len(g.bond_stereo) == 1
+    ls = pm.stereo_at(g, (1, 4))
+    assert isinstance(ls, pm.PlanarBond)
+    assert ls.chain == (2, 3)
+    assert ls.parity is None
+
+
+def test_pentatetraene_gets_atrop_chain() -> None:
+    """CC=C=C=C=CC: four double bonds, an AtropBond on (1, 5) with chain (2, 3, 4)."""
+    g = _from_smiles_quietly("CC=C=C=C=CC")
+    ls = pm.stereo_at(g, (1, 5))
+    assert isinstance(ls, pm.AtropBond)
+    assert ls.chain == (2, 3, 4)
+
+
+@pytest.mark.parametrize("smiles", ["C=C=C", "CC=C=CC", "CC=C=C=CC", "C=C=CC=C=C"])
+def test_no_per_bond_ls_inside_chain(smiles: str) -> None:
+    """Every bond LS is a chain LS, none on a chain's double bonds."""
+    g = _from_smiles_quietly(smiles)
+    assert g.bond_stereo
+    assert all(ls.chain for ls in g.bond_stereo)
+
+
+def test_two_chains_in_one_graph() -> None:
+    """C=C=CC=C=C: two trivial allene axes, (0, 2) and (3, 5)."""
+    g = _from_smiles_quietly("C=C=CC=C=C")
+    assert [pm.site(ls) for ls in g.bond_stereo] == [(0, 2), (3, 5)]
+    assert pm.is_determined(g)
+
+
+def test_chain_in_a_ring() -> None:
+    """Cyclonona-1,2-diene: each end's substituents differ, so it's undetermined."""
+    g = _from_smiles_quietly("C1CCCCCC=C=C1")
+    assert _undetermined_sites(g) == [(6, 8)]
+
+
+@pytest.mark.parametrize("smiles", ["CC=C=O", "C=[N+]=[N-]", "O=C=O"])
+def test_chain_with_a_bare_end_has_no_ls(smiles: str) -> None:
+    """A ketene, diazomethane and CO2: an end without two substituents, so no LS."""
+    assert not _from_smiles_quietly(smiles).bond_stereo
+
+
 def _sn2() -> pm.StereoReactionGraph:
     tet = pm.Tetrahedral(atoms=(0, 1, 2, 3, 4), parity=1)
     change = pm.StereoChange(
