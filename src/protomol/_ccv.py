@@ -21,7 +21,7 @@ from ._backend import to_smg
 from ._reaction import products as _products
 from ._reaction import reactants as _reactants
 from ._reaction import reaction_graph, relabel, reverse
-from ._stereo import StereoChange, isomers
+from ._stereo import AtropBond, PlanarBond, StereoChange, Tetrahedral, isomers
 from ._types import (
     _LS,
     AnyGraph,
@@ -57,14 +57,19 @@ def ts_graphs(
 ) -> list[ReactionGraph] | list[StereoReactionGraph]:
     """The topologically distinct TS channels from reactants to products (CCV).
 
-    Each graph is in the reactants' atom order. With stereo inputs, the channels are
-    the stereo-distinct ones whose two sides are the given reactants and products
-    (stereo-aware isomorphism): each topological channel's LS are enumerated at the
+    Each graph is in the reactants' atom order, and each channel is one elementary step
+    that changes something (P44): the channel where nothing changes is never returned,
+    so a degenerate reaction (CH4 + CH3 → CH3 + CH4) gives its bond-changing channels.
+
+    With stereo inputs, the channels are the stereo-distinct ones whose two sides are
+    the given reactants and products (stereo-aware isomorphism). If the two sides
+    differ only in stereo, a channel with no bond changes and exactly one stereo change
+    that needs no bonds (a rotation about a bond LS, or an inversion at a lone-pair
+    centre) comes first. Otherwise, each topological channel's LS are enumerated at the
     sites its reaction touches, so diastereotopic atoms give separate channels (the two
-    H of C3 in (R)-butan-2-ol, say). Every other LS stays unchanged; only if no
-    enumeration matches the inputs may one of them change, then two, and so on (least
-    motion), so a (Z) → (E) rotation keeps its one change and an unreacting CH3 is
-    never inverted. The `ts` slots stay empty: fleeting stereo comes in Phase 5.
+    H of C3 in (R)-butan-2-ol, say), and every other LS stays unchanged: a channel that
+    would need a stereo change at an untouched site is not one step, and is dropped.
+    The `ts` slots stay empty: fleeting stereo comes in Phase 5.
 
     `extra_breaks` is the most bonds the search breaks and re-forms beyond those the
     bond counts require.
@@ -90,10 +95,19 @@ def ts_graphs(
                 f"{getattr(reactants, name)} and {getattr(products, name)}"
             )
             raise GraphError(msg)
-    results = _CCV(reactants, products).results(extra_breaks=extra_breaks)
     if isinstance(reactants, MolGraph):
-        return [gra for gra, _ in results]
+        return [
+            gra
+            for gra, _ in _CCV(reactants, products).results(extra_breaks=extra_breaks)
+        ]
     assert isinstance(products, StereoMolGraph)  # noqa: S101 (for the type checker)
+    if _is_isomorphic(_nx(reactants), _nx(products)) and _frozen_smg(
+        reactants
+    ) != _frozen_smg(products):
+        rotations = _no_bond_change_channels(reactants, products)
+        if rotations:
+            return rotations
+    results = _CCV(reactants, products).results(extra_breaks=extra_breaks)
     n = len(reactants.symbols)
     return [
         srg
@@ -108,6 +122,35 @@ def ts_graphs(
     ]
 
 
+def _no_bond_change_channels(
+    reactants: StereoMolGraph, products: StereoMolGraph
+) -> list[StereoReactionGraph]:
+    """The channels with no bond changes and one stereo change that needs no bonds.
+
+    The change is another configuration of one determined LS of the reactants: a bond
+    LS (a rotation) or a `Tetrahedral` with a lone-pair slot (an inversion). The
+    product side must be stereo-isomorphic to `products`, and the channels are
+    deduplicated as in `_stereo_channels`. The caller checks that the inputs are not
+    stereo-isomorphic: a trivial LS (a terminal =CH2) would otherwise give a rotation.
+    """
+    unchanged = reaction_graph(reactants, reactants)
+    want = _frozen_smg(products)
+    found: dict[object, StereoReactionGraph] = {}
+    for ls in (*reactants.atom_stereo, *reactants.bond_stereo):
+        if ls.parity is None or not (
+            isinstance(ls, PlanarBond | AtropBond)
+            or (isinstance(ls, Tetrahedral) and None in ls.atoms)
+        ):
+            continue
+        for alt in isomers(ls):
+            if alt == ls:
+                continue
+            cand = with_stereo(unchanged, StereoChange(reactant=ls, product=alt))
+            if _frozen_smg(_products(cand)) == want:
+                found.setdefault(_frozen_smg(cand), cand)
+    return list(found.values())
+
+
 def _stereo_channels(
     reactants: StereoMolGraph, products: StereoMolGraph, srg: StereoReactionGraph
 ) -> list[StereoReactionGraph]:
@@ -116,9 +159,8 @@ def _stereo_channels(
     `srg` is the channel with one atom mapping. The changes at the sites its reaction
     touches (its centre, or a bond's end, is in a breaking or forming bond) get every
     configuration on each side; a side whose LS is undetermined stays undetermined.
-    The other sites keep their reactant LS on both sides, unless no enumeration
-    matches, in which case the fewest of them get another product LS (`_inverted`);
-    `srg` itself bounds that number.
+    The other sites keep their reactant LS on both sides (P44: no stereo change at an
+    untouched site), so the result is empty if the inputs need one.
     Candidates are deduplicated, as in stereomolgraph's `generate_stereoisomers`, by
     frozen stereomolgraph graphs, whose hash and `==` are stereo-aware isomorphism.
     """
@@ -134,26 +176,14 @@ def _stereo_channels(
         else:
             untouched.append(item)
 
-    # `srg` itself is a candidate with this many inversions, so the search ends there
-    most = sum(
-        not _touches(item, reacting)
-        for item in srg.stereo_changes
-        if item.reactant is not None
-    )
     want = (_frozen_smg(reactants), _frozen_smg(products))
-    for count in range(most + 1):
-        found: dict[object, StereoReactionGraph] = {}
-        for inverted in _inverted(untouched, count):
-            sites = {_site(change) for change in inverted}
-            kept = [ls for ls in untouched if _site(ls) not in sites]
-            for changes in itertools.product(*touched):
-                cand = with_stereo(srg, *kept, *inverted, *changes)
-                sides = (_frozen_smg(_reactants(cand)), _frozen_smg(_products(cand)))
-                if sides == want:
-                    found.setdefault(_frozen_smg(cand), cand)
-        if found:
-            return list(found.values())
-    return []
+    found: dict[object, StereoReactionGraph] = {}
+    for changes in itertools.product(*touched):
+        cand = with_stereo(srg, *untouched, *changes)
+        sides = (_frozen_smg(_reactants(cand)), _frozen_smg(_products(cand)))
+        if sides == want:
+            found.setdefault(_frozen_smg(cand), cand)
+    return list(found.values())
 
 
 def _touches(change: StereoChange, reacting: set[int]) -> bool:
@@ -185,21 +215,6 @@ def _change_configurations(change: StereoChange) -> list[StereoChange]:
         StereoChange(reactant=r, product=p, ts=change.ts)
         for r, p in itertools.product(*sides)
     ]
-
-
-def _inverted(untouched: list[_LS], count: int) -> Iterator[list[StereoChange]]:
-    """Each way to give `count` untouched LS another product configuration.
-
-    Undetermined LS are never changed.
-    """
-    changeable = [ls for ls in untouched if ls.parity is not None]
-    for chosen in itertools.combinations(changeable, count):
-        others = [[iso for iso in isomers(ls) if iso != ls] for ls in chosen]
-        for alternatives in itertools.product(*others):
-            yield [
-                StereoChange(reactant=ls, product=alt)
-                for ls, alt in zip(chosen, alternatives, strict=True)
-            ]
 
 
 def _frozen_smg(gra: AnyGraph) -> object:
@@ -264,7 +279,9 @@ class _CCV:
         ):
             if maximum_bond_score and _bonding_score(gra) != max_score:
                 continue
-            if unique_isomorphs and any(_is_isomorphic(gra, g) for g, _ in kept):
+            if unique_isomorphs and any(
+                _is_isomorphic(_nx(gra), _nx(g)) for g, _ in kept
+            ):
                 continue
             kept.append((gra, mapping))
         return kept
@@ -331,6 +348,9 @@ class _CCV:
                 (min(inverse[i], inverse[j]), max(inverse[i], inverse[j]))
                 for i, j in break_bonds2
             )
+            # Nothing changes, or a bond breaks and re-forms: not a channel (P44)
+            if not (breaking or forming) or breaking & forming:
+                continue
             if seen is not None:
                 if (breaking, forming) in seen:
                     continue
@@ -392,5 +412,5 @@ def _matcher(gra1: nx.Graph, gra2: nx.Graph) -> GraphMatcher:
     )
 
 
-def _is_isomorphic(gra1: ReactionGraph, gra2: ReactionGraph) -> bool:
-    return _matcher(_nx(gra1), _nx(gra2)).is_isomorphic()
+def _is_isomorphic(gra1: nx.Graph, gra2: nx.Graph) -> bool:
+    return _matcher(gra1, gra2).is_isomorphic()

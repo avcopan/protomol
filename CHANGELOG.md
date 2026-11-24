@@ -21,6 +21,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   chain.
 - `reaction_graph`, `reactants`, `products`, `reverse`, `relabel` and `without_stereo`.
 - `ts_graphs`: the transition-state graphs of a reaction, fewest bonds first (ported from
-  autoccv).
+  autoccv), each one elementary step that changes something: a degenerate reaction gives
+  its bond-changing channels, and a stereoisomerization its one rotation or lone-pair
+  inversion.
 - `display` and Jupyter drawings of the four types.
 - `protomol.examples`: `species`, `abstraction_ts` and `stereoisomerization_ts`.

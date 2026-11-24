@@ -121,3 +121,63 @@ def test_ts_graphs_rejects_different_spin() -> None:
     """Reactants and products with different spins raise."""
     with pytest.raises(ValueError, match="spin"):
         pm.ts_graphs(pm.from_smiles("CCO"), pm.from_smiles("[CH2]O.[CH3]"))
+
+
+def _assert_h_transfer(ts: pm.ReactionGraph | pm.StereoReactionGraph) -> None:
+    """One C-H breaks and the same H forms a bond to the other C."""
+    ((c1, h1),) = ts.breaking
+    ((c2, h2),) = ts.forming
+    assert h1 == h2
+    assert c1 != c2
+    assert {ts.symbols[c1], ts.symbols[c2], ts.symbols[h1]} == {"C", "H"}
+
+
+def test_ts_graphs_degenerate_h_transfer() -> None:
+    """CH4 + CH3 → CH3 + CH4: no empty channel, the H transfer (P44)."""
+    rct_gra, prd_gra = _sides("C.[CH3]", "[CH3].C")
+    (ts,) = pm.ts_graphs(rct_gra, prd_gra)
+    _assert_h_transfer(ts)
+    (ts_free,) = pm.ts_graphs(pm.without_stereo(rct_gra), pm.without_stereo(prd_gra))
+    _assert_h_transfer(ts_free)
+
+
+def test_ts_graphs_walden_inversion() -> None:
+    """Cl- + CH3CHFCl → inverted: break C-Cl, form Cl-C, with the inversion (P44)."""
+    rct_gra, prd_gra = _sides("Cl[C@H](F)C.[Cl-]", "[Cl-].Cl[C@@H](F)C")
+    rct_free = pm.without_stereo(rct_gra)
+    assert _same_stereo_graph(rct_free, pm.without_stereo(prd_gra))
+    assert not _same_stereo_graph(rct_gra, prd_gra)
+    (ts,) = pm.ts_graphs(rct_gra, prd_gra)
+    assert ts.breaking == ((0, 1),)
+    assert ts.forming == ((1, 4),)
+    (change,) = ts.stereo_changes
+    assert _site(change) == 1
+    assert change.reactant is not None
+    assert change.product is not None
+    assert _same_stereo_graph(pm.reactants(ts), rct_gra)
+    assert _same_stereo_graph(pm.products(ts), prd_gra)
+
+
+def test_ts_graphs_amine_inversion() -> None:
+    """An amine N inversion (a lone-pair Tetrahedral) gives one channel (P44)."""
+    gra = pm.from_smiles("C[N@](CC)CCC")
+    tet = pm.stereo_at(gra, 1)
+    assert isinstance(tet, pm.Tetrahedral)
+    assert None in tet.atoms
+    rct_gra = pm.with_stereo(gra, pm.Tetrahedral(atoms=tet.atoms, parity=1))
+    prd_gra = pm.with_stereo(gra, pm.Tetrahedral(atoms=tet.atoms, parity=-1))
+    (ts,) = pm.ts_graphs(rct_gra, prd_gra)
+    assert (ts.breaking, ts.forming) == ((), ())
+    assert [_site(change) for change in ts.stereo_changes] == [1]
+
+
+def test_ts_graphs_two_rotations_give_no_rotation() -> None:
+    """(Z,Z) → (E,E) hexa-2,4-diene: no channel without bond changes (P44).
+
+    Two rotations are two steps. CCV's extra breaks still find double H swaps; this
+    unrealistic case doesn't constrain them, so only the rotations are checked.
+    """
+    rct_gra, prd_gra = _sides(r"C/C=C\C=C/C", r"C/C=C/C=C/C")
+    for ts in pm.ts_graphs(rct_gra, prd_gra):
+        assert ts.breaking
+        assert ts.forming
