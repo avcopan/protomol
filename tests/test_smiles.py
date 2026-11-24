@@ -6,6 +6,7 @@ import pytest
 
 import protomol as pm
 from protomol._backend import from_smg, to_smg
+from protomol._smiles import _without_linear_bond_stereo
 
 
 def _undetermined_sites(g: pm.StereoMolGraph) -> list[int | tuple[int, int]]:
@@ -238,6 +239,27 @@ def test_chain_in_a_ring() -> None:
 def test_chain_with_a_bare_end_has_no_ls(smiles: str) -> None:
     """A ketene, diazomethane and CO2: an end without two substituents, so no LS."""
     assert not _from_smiles_quietly(smiles).bond_stereo
+
+
+def test_ketenimine_axis_has_a_lone_pair_slot() -> None:
+    """CC=C=NC: the bent N end has one substituent and a lone pair, as in an imine."""
+    g = _from_smiles_quietly("CC=C=NC")
+    ls = pm.stereo_at(g, (1, 3))
+    assert isinstance(ls, pm.AtropBond)
+    assert ls.chain == (2,)
+    assert None in ls.atoms
+    assert ls.parity is None
+
+
+def test_bond_stereo_needs_sp2_ends() -> None:
+    """A PlanarBond with a linear (sp) end, the C of a ketene, is removed."""
+    ketene = pm.StereoMolGraph(  # CH3-CH=C=O: C0, C1, C2, O3, H4-H7
+        symbols=["C", "C", "C", "O", "H", "H", "H", "H"],
+        bonds=[(0, 1), (1, 2), (2, 3), (0, 4), (0, 5), (0, 6), (1, 7)],
+        bond_stereo=[pm.PlanarBond(atoms=(0, 7, 1, 2, 3, None))],
+    )
+    assert not _without_linear_bond_stereo(ketene, linear={2}).bond_stereo
+    assert _without_linear_bond_stereo(ketene, linear=set()).bond_stereo
 
 
 def _sn2() -> pm.StereoReactionGraph:

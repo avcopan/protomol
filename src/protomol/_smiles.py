@@ -43,7 +43,8 @@ def from_smiles(
     a fixed parity. Stereo elements the SMILES leaves unspecified stay undetermined
     (parity None) until `stereoisomers`. A cumulated chain gets one LS on its ends, a
     `PlanarBond` or an `AtropBond` with the inner atoms as its `chain`; RDKit doesn't
-    read allene stereo, so it is never determined by the SMILES.
+    read allene stereo, so it is never determined by the SMILES. A double bond or chain
+    has stereo only if neither end is sp (linear).
 
     >>> gra = from_smiles("[H]OC")
     >>> gra.symbols
@@ -85,8 +86,10 @@ def from_smiles(
     try:
         gra = from_smg(_RDMOL_TO_SMG(mol), charge=formal_charge, spin=spin)
         assert isinstance(gra, StereoMolGraph)  # noqa: S101  (narrows the type)
+        linear = _linear_atoms(mol)
         for chain in _cumulated_chains(mol):
-            gra = _with_chain_stereo(gra, chain)
+            gra = _with_chain_stereo(gra, chain, linear)
+        gra = _without_linear_bond_stereo(gra, linear)
         gra = with_stereo(gra, *_amine_lss(mol, gra))
         return _fill_trivial_sites(gra)
     except ValidationError as err:
@@ -126,45 +129,76 @@ def _cumulated_chains(mol: Chem.Mol) -> list[tuple[int, ...]]:
     return sorted(chains)
 
 
-def _chain_stereo(
-    gra: StereoMolGraph, chain: tuple[int, ...]
-) -> PlanarBond | AtropBond | None:
-    """The LS of a chain, or None if either end has fewer than two substituents.
+def _linear_atoms(mol: Chem.Mol) -> set[int]:
+    """The atoms RDKit calls sp in the SMILES's Lewis structure (steric number 2).
 
-    A `PlanarBond` for an odd number of double bonds, an `AtropBond` for even. The LS
-    is undetermined, since RDKit doesn't read allene or cumulene stereo from a SMILES.
+    An end of a double bond or a cumulated chain can't carry stereo if it is linear:
+    =C=, or the C of a ketene. The test is "not sp" rather than "sp2", because RDKit
+    calls a radical centre such as allyl's CH2 sp3, though resonance makes it planar.
+    """
+    sp = Chem.HybridizationType.SP
+    return {atom.GetIdx() for atom in mol.GetAtoms() if atom.GetHybridization() == sp}
+
+
+def _without_linear_bond_stereo(
+    gra: StereoMolGraph, linear: set[int]
+) -> StereoMolGraph:
+    """`gra` without the bond LS (other than chain LS) that have a linear end."""
+    for ls in gra.bond_stereo:
+        end1, end2 = ls.atoms[2:4]
+        if not ls.chain and {end1, end2} & linear:
+            gra = remove_stereo(gra, (end1, end2))
+    return gra
+
+
+def _chain_stereo(
+    gra: StereoMolGraph, chain: tuple[int, ...], linear: set[int]
+) -> PlanarBond | AtropBond | None:
+    """The LS of a chain, or None unless each end is non-linear with a substituent atom.
+
+    As for a double bond, an end's other slot may be a lone pair (`None`): the N of a
+    ketenimine R-N=C=CR2, say. A `PlanarBond` for an odd number of double bonds, an
+    `AtropBond` for even. The LS is undetermined, since RDKit doesn't read allene or
+    cumulene stereo from a SMILES.
     """
     end1, *inner, end2 = chain
     subs = [
         tuple(i for i in neighbors(gra, end) if i != next_)
         for end, next_ in ((end1, chain[1]), (end2, chain[-2]))
     ]
-    if any(len(sub) != _CHAIN_END_SUBSTITUENTS for sub in subs):
+    if {end1, end2} & linear or not all(
+        1 <= len(sub) <= _CHAIN_END_SUBSTITUENTS for sub in subs
+    ):
         return None
-    (a, b), (c, d) = subs
+    (a, b), (c, d) = ((*sub, None)[:2] for sub in subs)
     kind = PlanarBond if len(inner) % 2 == 0 else AtropBond
     return kind(atoms=(a, b, end1, end2, c, d), chain=tuple(inner))
 
 
-def _with_chain_stereo(gra: StereoMolGraph, chain: tuple[int, ...]) -> StereoMolGraph:
+def _with_chain_stereo(
+    gra: StereoMolGraph, chain: tuple[int, ...], linear: set[int]
+) -> StereoMolGraph:
     """`gra` with the per-bond LS on the chain's bonds replaced by the chain LS.
 
     The chain LS gets its first isomer if the chain is trivial: if either end's two
-    substituents are equivalent. "Equivalent" is approximated by equal
+    substituents are equivalent atoms. "Equivalent" is approximated by equal
     Weisfeiler-Lehman hashes of the stereo-free graph; the exact test comes with the
     canonical form (Phase 3).
     """
     for bond in itertools.pairwise(chain):
         if stereo_at(gra, bond) is not None:
             gra = remove_stereo(gra, bond)
-    ls = _chain_stereo(gra, chain)
+    ls = _chain_stereo(gra, chain, linear)
     if ls is None:
         return gra
-    a, b, _, _, c, d = ls.atoms
     hashes = nx.weisfeiler_lehman_subgraph_hashes(
         _nx(gra), node_attr="symbol", iterations=len(gra.symbols)
     )
-    if hashes[a][-1] == hashes[b][-1] or hashes[c][-1] == hashes[d][-1]:
+    a, b, _, _, c, d = ls.atoms
+    if any(
+        x is not None and y is not None and hashes[x][-1] == hashes[y][-1]
+        for x, y in ((a, b), (c, d))
+    ):
         ls = isomers(ls)[0]
     return with_stereo(gra, ls)
 
