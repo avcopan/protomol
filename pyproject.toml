@@ -47,6 +47,14 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**.py" = ["S101", "PLR2004"]  # assert, magic values
 "scripts/**.py" = ["T201", "INP001"]  # print, not a package
+"benchmarks/**.py" = [  # one-off research scripts, not part of the package
+    "T201",    # print
+    "INP001",  # not a package
+    "E501",    # long lines in docstrings and SMARTS
+    "PLC0415", # imports inside the pool workers
+    "ANN401", "FBT001", "ARG001", "N818", "S311", "S324", "DTZ011",
+    "C901", "PLR0912", "PLR0915",  # long check functions
+]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
