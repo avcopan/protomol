@@ -63,18 +63,32 @@ True
 
 ## Canonical form
 
-::: {.callout-note}
-Planned: Phase 3 (`canonical_form`, `canonical_json`, `low_t`, `high_t`).
-:::
+`canonical_form(gra)` returns the canonical graph and the atom map to it: atom k of the
+canonical graph is atom `atom_map[k]` of `gra`. Two numberings of one molecule give one
+canonical graph, and `canonical_json` is its JSON, the string AutoStorage stores:
 
 ```python
-import numpy as np
+>>> import numpy as np
+>>> can, atom_map = pm.canonical_form(hoh)
+>>> atom_map
+(1, 0, 2)
+>>> pm.relabel(hoh, atom_map) == can   # atom_map is the relabelling
+True
+>>> pm.relabel(can, np.argsort(atom_map)) == hoh   # its inverse recovers the input
+True
+>>> pm.canonical_json(hoh) == pm.canonical_json(gra)
+True
+>>> pm.canonical_json(gra)
+'{"type":"MolGraph","symbols":["O","H","H"],"bonds":[[0,1],[0,2]],"charge":0,"spin":0}'
 
-can, atom_map = pm.canonical_form(gra)   # atom k of `can` is atom atom_map[k] of `gra`
-pm.relabel(gra, atom_map) == can         # True: atom_map is the relabelling
-pm.relabel(can, np.argsort(atom_map)) == gra   # True: its inverse recovers the input
-pm.canonical_json(gra)                   # the string AutoStorage stores
 ```
+
+The numbering doesn't see a chain LS (an allene or cumulene axis) yet, so for a graph
+with one the canonical form may depend on the input numbering.
+
+::: {.callout-note}
+Planned: Phase 3 (`low_t`, `high_t`).
+:::
 
 ## An SMG identity algorithm
 
@@ -96,7 +110,8 @@ def smg_low_t(geo, gra, other_geos):      # registered as "smg_low_t@1", orders 
 ```
 
 `smg@1` skips `low_t` (the graph as given), `smg_high_t@1` uses `high_t`, and `smg_conn@1`
-uses `pm.without_stereo`. The value is the JSON or its hash (pm open question 1).
+uses `pm.without_stereo`. The value is the canonical JSON; AutoStorage adds its hash
+for the uniqueness index (pm P47).
 
 ## Storing and finding a point by its graph
 

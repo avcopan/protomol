@@ -29,6 +29,7 @@ from ._types import (
     StereoReactionGraph,
 )
 from ._vendor.stereomolgraph import stereodescriptors as smg_ls
+from ._vendor.stereomolgraph.algorithms.canon import canon_atom_num
 from ._vendor.stereomolgraph.graphs.crg import Change
 from ._vendor.stereomolgraph.graphs.crg import CondensedReactionGraph as _SmgCRG
 from ._vendor.stereomolgraph.graphs.mg import MolGraph as _SmgMG
@@ -129,6 +130,19 @@ def from_smg(
     if stereo:
         return StereoMolGraph(**data)
     return MolGraph(**data)
+
+
+def canon_numbering(gra: AnyGraph) -> tuple[int, ...]:
+    """A canonical atom order: canonical atom k is atom `order[k]` of `gra` (P22).
+
+    The back-end's `canon_atom_num` on `to_smg(gra)`, as stereomolgraph gives it (P45).
+    A chain LS isn't seen by the numbering (`to_smg` drops it with a warning), so two
+    numberings of a graph with one may differ by a permutation that moves it.
+    """
+    if not gra.symbols:
+        return ()
+    numbers = canon_atom_num(to_smg(gra))
+    return tuple(sorted(numbers, key=numbers.__getitem__))
 
 
 def _add_bonds(smg: Any, gra: AnyGraph) -> None:  # noqa: ANN401

@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- `canonical_form(gra) -> (canonical, atom_map)` for the four graph types, with
+  `atom_map[k]` the input index of canonical atom k (a tuple), and `canonical_json(gra)`,
+  the JSON of the canonical graph. The numbering is stereomolgraph's `canon_atom_num`;
+  it doesn't see chain LS yet.
+
 ### Fixed
 
 - `AtropBond`'s permutation group: an end swap now keeps the helicity (the axis's C2),
