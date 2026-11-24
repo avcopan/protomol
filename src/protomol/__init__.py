@@ -1,6 +1,6 @@
 """protomol: placeholder graph types for AutoStorage and AutoEngine."""
 
-__version__ = "0.0.0"
+__version__ = "0.0.1"
 
 from . import examples
 from ._ccv import ts_graphs
