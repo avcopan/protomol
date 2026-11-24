@@ -3,6 +3,7 @@
 import pytest
 
 import protomol as pm
+from protomol._backend import to_smg
 from protomol._ccv import _CCV, _matcher
 from protomol._types import _nx
 
@@ -78,6 +79,13 @@ def test_ts_graphs_with_stereo_keeps_reactant_order() -> None:
     (change,) = ts.stereo_changes
     assert change.product is None
     assert pm.stereo_at(ts, 1) == pm.stereo_at(rct_gra, 1)
+
+
+def test_stereo_isomorphism_survives_relabelling() -> None:
+    """The vendored stereomolgraph matches stereo changes on relabelled atoms."""
+    (ts,) = pm.ts_graphs(*_sides("CC.[OH]", "C[CH2].O"))
+    perm = [1, 0, 2, 6, 7, 8, 3, 4, 5, 9]  # swap the two CH3 groups
+    assert to_smg(ts) == to_smg(pm.relabel(ts, perm))
 
 
 def test_ts_graphs_rejects_different_spin() -> None:
