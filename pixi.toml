@@ -1,5 +1,5 @@
 [workspace]
-channels = ["conda-forge"]
+channels = ["conda-forge", "https://repo.prefix.dev/avcopan/automech"]
 platforms = ["linux-64"]
 preview = ["pixi-build"]
 requires-pixi = ">=0.82"
@@ -20,6 +20,7 @@ ignore-pypi-mapping = false
 
 [package.build.config.pypi-conda-map]
 # Add name mappings for packages not on conda-forge
+autogeom = "autogeom"  # from the avcopan/automech channel
 
 [package.host-dependencies]
 # Python and UV are automatically included

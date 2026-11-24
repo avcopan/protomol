@@ -47,7 +47,7 @@ def display(gra: AnyGraph, *, atom_indices: bool = False) -> None:
         ImportError: If IPython isn't installed.
     """
     # IPython is optional, and not in the type-checking environment
-    import IPython.display  # noqa: PLC0415  # ty: ignore[import-not-found]
+    import IPython.display  # noqa: PLC0415
 
     IPython.display.display(IPython.display.SVG(_svg(gra, atom_indices=atom_indices)))
 

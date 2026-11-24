@@ -16,8 +16,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   (stereomolgraph's VF2++, comparing stereo, breaking and forming bonds, stereo changes,
   charge and spin), and `deduplicate(graphs)`: the first graph of each isomorphism class,
   in input order.
+- `from_geometry(geo)`: the `StereoMolGraph` of an `autogeom.Geometry`, keeping its atom
+  order, charge and spin. Bonds come from covalent radii and a Lewis structure from
+  autogeom's solver. The LS sites are the low-T ones `from_smiles` gives, and every
+  parity is read from the coordinates (undetermined only for a flat centre or a double
+  bond twisted by about 90°).
 
 ### Changed
+
+- protomol depends on autogeom (from the `avcopan/automech` channel on prefix.dev).
 
 - `ts_graphs` compares and deduplicates its channels with `isomorphism` and
   `deduplicate`.

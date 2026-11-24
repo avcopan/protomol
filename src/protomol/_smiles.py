@@ -82,9 +82,18 @@ def from_smiles(
         raise GraphError(msg)
     if spin is None:
         spin = sum(atom.GetNumRadicalElectrons() for atom in mol.GetAtoms())
+    return _from_rdkit_mol(mol, charge=formal_charge, spin=spin)
 
+
+def _from_rdkit_mol(mol: Chem.Mol, *, charge: int, spin: int) -> StereoMolGraph:
+    """The stereo graph of an RDKit molecule with explicit H, in its atom order.
+
+    The low-T approximation `from_smiles` documents: stereomolgraph perceives the LS
+    from the Lewis structure and the chiral tags, then the chain LS, the linear-end
+    rule, the amine N and the trivial sites. `from_geometry` shares it.
+    """
     try:
-        gra = from_smg(_RDMOL_TO_SMG(mol), charge=formal_charge, spin=spin)
+        gra = from_smg(_RDMOL_TO_SMG(mol), charge=charge, spin=spin)
         assert isinstance(gra, StereoMolGraph)  # noqa: S101  (narrows the type)
         linear = _linear_atoms(mol)
         for chain in _cumulated_chains(mol):

@@ -5,9 +5,10 @@ title: Graph and geometry
 Atom i of a graph is atom i of its geometry. Every routine crosses between the two: it
 seeds a structure from the graph, and checks each structure it gets back against the graph.
 
+Geometries are autogeom's `Geometry`, which carries `charge` and `spin` too.
+
 ::: {.callout-note}
-Planned: Phase 2 (`from_geometry`, `embed`) and Phase 3 (`stereo_matches`). Geometries are
-autogeom's.
+Planned: Phase 2 (`embed`) and Phase 3 (`stereo_matches`).
 :::
 
 ## Seeding a structure
@@ -28,9 +29,28 @@ pm.stereo_matches(smg, geo)       # LS parities read from the coordinates
 ## Perceiving a graph
 
 For a structure from outside a workflow (an INCITE geometry, an IRC end point), the atom
-order is kept:
+order is kept. The LS sites are the low-T ones `from_smiles` gives, and every parity is
+read from the coordinates, so the graph describes this structure atom for atom:
 
 ```python
-gra = pm.from_geometry(geo)       # a StereoMolGraph with the default (low-T) LS
-pm.display(gra, atom_indices=True)  # check what was perceived, in the geometry's atom order
+>>> import autogeom as ag
+>>> import protomol as pm
+>>> geo = ag.from_smiles(r"C[C@@H](O)/C=C/C")  # stands in for an outside structure
+>>> gra = pm.from_geometry(geo)
+>>> gra.symbols[:5], (gra.charge, gra.spin), pm.is_determined(gra)
+(('C', 'C', 'O', 'C', 'C'), (0, 0), True)
+>>> pm.canonical_json(gra) == pm.canonical_json(pm.examples.species())
+True
+>>> pm.display(gra, atom_indices=True)  # doctest: +SKIP
+
+```
+
+Renumbering the geometry renumbers the graph the same way. A mirror-image structure gives
+the enantiomer:
+
+```python
+>>> mirror = pm.from_geometry(ag.reflect(geo, [0.0, 0.0, 1.0]))
+>>> pm.canonical_json(mirror) == pm.canonical_json(pm.from_smiles(r"C[C@H](O)/C=C/C"))
+True
+
 ```

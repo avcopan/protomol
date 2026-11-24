@@ -6,6 +6,7 @@ license = "MIT"
 license-files = ["LICENSE"]
 authors = [{name = "Andreas V. Copan", email = "avcopan@uga.edu"}]
 dependencies = [
+    "autogeom>=0.0.1",
     "more-itertools>=8",
     "networkx>=3.5",
     "numpy>=2.2",
@@ -70,6 +71,7 @@ root_package = "protomol"
 name = "Module Layering"
 type = "layers"
 layers = [
+    "protomol._geometry",
     "protomol._smiles | protomol._display | protomol._canon | protomol._compare",
     "protomol._backend | protomol._json",
     "protomol._types",
