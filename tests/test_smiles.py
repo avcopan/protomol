@@ -161,7 +161,7 @@ def test_symmetric_amine_n_is_trivial() -> None:
 
 @pytest.mark.parametrize("smiles", ["CC(=O)NC", "Nc1ccccc1"])
 def test_amide_and_aniline_n_have_no_lone_pair_stereo(smiles: str) -> None:
-    """RDKit calls amide and aniline N sp2, so they get no LS."""
+    """Amide and aniline N are conjugated, so they get no LS (more in test_low_t)."""
     n = pm.from_smiles(smiles).symbols.index("N")
     assert pm.stereo_at(pm.from_smiles(smiles), n) is None
 

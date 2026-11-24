@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- `from_smiles` and `from_geometry` put a lone-pair `Tetrahedral` on exactly the
+  pyramidal atoms of the low-T scheme: N, P or S with three neighbours and one lone pair
+  (amines, phosphines, sulfoxides, sulfonium ions), but not an N next to a π system or
+  a radical centre (amides, anilines, enamines, nitroxides, α-amino radicals). Phosphines
+  and sulfoxides used to get one only from a chiral tag.
+
 ## [0.0.2] - 2026-11-24
 
 ### Added

@@ -1,8 +1,7 @@
 """`from_smiles`: RDKit parses, stereomolgraph perceives the LS (P7, P16).
 
-protomol then puts one chain LS on each cumulated chain (P15), adds the lone-pair LS of
-sp3 amine N (a Phase 1 approximation of the low-T scheme), fills in the trivial sites,
-and checks charge and spin.
+protomol then puts one chain LS on each cumulated chain (P15), applies the low-T rules
+(the pyramidal atoms), fills in the trivial sites, and checks charge and spin.
 """
 
 import itertools
@@ -27,7 +26,8 @@ from ._vendor.stereomolgraph.rdmol2graph import RDMol2StereoMolGraph
 _RDMOL_TO_SMG = RDMol2StereoMolGraph(
     resonance=True, lone_pair_stereo=True, stereo_complete=False
 )
-_AMINE_N_NEIGHBORS = 3
+_PYRAMIDAL_SYMBOLS = frozenset({"N", "P", "S"})
+_PYRAMIDAL_NEIGHBORS = 3
 _CHAIN_END_SUBSTITUENTS = 2
 
 
@@ -88,9 +88,10 @@ def from_smiles(
 def _from_rdkit_mol(mol: Chem.Mol, *, charge: int, spin: int) -> StereoMolGraph:
     """The stereo graph of an RDKit molecule with explicit H, in its atom order.
 
-    The low-T approximation `from_smiles` documents: stereomolgraph perceives the LS
-    from the Lewis structure and the chiral tags, then the chain LS, the linear-end
-    rule, the amine N and the trivial sites. `from_geometry` shares it.
+    The low-T scheme `from_smiles` documents: stereomolgraph perceives the LS from the
+    Lewis structure, its resonance structures and the chiral tags, then the chain LS,
+    the linear-end rule, the pyramidal atoms and the trivial sites. `from_geometry`
+    shares it.
     """
     try:
         gra = from_smg(_RDMOL_TO_SMG(mol), charge=charge, spin=spin)
@@ -99,7 +100,7 @@ def _from_rdkit_mol(mol: Chem.Mol, *, charge: int, spin: int) -> StereoMolGraph:
         for chain in _cumulated_chains(mol):
             gra = _with_chain_stereo(gra, chain, linear)
         gra = _without_linear_bond_stereo(gra, linear)
-        gra = with_stereo(gra, *_amine_lss(mol, gra))
+        gra = _with_pyramidal_lss(mol, gra)
         return _fill_trivial_sites(gra)
     except ValidationError as err:
         raise GraphError(str(err)) from err
@@ -212,27 +213,79 @@ def _with_chain_stereo(
     return with_stereo(gra, ls)
 
 
-def _amine_lss(mol: Chem.Mol, gra: StereoMolGraph) -> list[Tetrahedral]:
-    """A lone-pair `Tetrahedral` on each sp3 N with three neighbours and no LS yet.
+def _lone_pairs(atom: Chem.Atom) -> int:
+    """The lone pairs of an atom in the molecule's Lewis structure."""
+    outer = Chem.GetPeriodicTable().GetNOuterElecs(atom.GetAtomicNum())
+    nonbonding = (
+        outer
+        - atom.GetFormalCharge()
+        - atom.GetTotalValence()
+        - atom.GetNumRadicalElectrons()
+    )
+    return nonbonding // 2
 
-    stereomolgraph only gives one when the SMILES has a chiral tag. RDKit calls amide
-    and aniline N `SP2`, so they get none. Phase 3 replaces this with the low-T rules.
+
+def _is_pi_atom(atom: Chem.Atom) -> bool:
+    """Whether an atom is in a π system: a multiple bond or an unpaired electron."""
+    return atom.GetNumRadicalElectrons() > 0 or any(
+        bond.GetBondType() != Chem.BondType.SINGLE for bond in atom.GetBonds()
+    )
+
+
+def _is_pyramidal(atom: Chem.Atom) -> bool:
+    """Whether an atom is a pyramidal centre of the low-T scheme (ch. L1562, L1655).
+
+    Three neighbours and one lone pair (steric number 4), on N, P or S: amines,
+    phosphines, sulfoxides and sulfonium ions. The lone pair is counted in the Lewis
+    structure, so an onium N (no lone pair) is not one, and a sulfoxide is one in both
+    its S=O and S+-O- forms. An N next to a π system (a multiple bond or a radical
+    centre) is conjugated and planar, or inverts too fast to keep: amides, anilines,
+    enamines, nitrosamines, nitroxides and alpha-amino radicals. P and S stay pyramidal
+    when conjugated (barriers ≥ 15 kcal/mol). O+ and C- centres invert too fast and
+    are never pyramidal.
     """
-    has_ls = {ls.atoms[0] for ls in gra.atom_stereo}
-    return [
-        Tetrahedral(
-            atoms=(
-                atom.GetIdx(),
-                *(neighbor.GetIdx() for neighbor in atom.GetNeighbors()),
-                None,
-            )
+    if (
+        atom.GetSymbol() not in _PYRAMIDAL_SYMBOLS
+        or atom.GetDegree() != _PYRAMIDAL_NEIGHBORS
+        or atom.GetIsAromatic()
+        or _lone_pairs(atom) != 1
+    ):
+        return False
+    if atom.GetSymbol() == "N":
+        return not _is_pi_atom(atom) and not any(
+            _is_pi_atom(neighbor) for neighbor in atom.GetNeighbors()
         )
-        for atom in mol.GetAtoms()
-        if atom.GetSymbol() == "N"
-        and atom.GetDegree() == _AMINE_N_NEIGHBORS
-        and atom.GetHybridization() == Chem.HybridizationType.SP3
-        and atom.GetIdx() not in has_ls
-    ]
+    return True
+
+
+def _with_pyramidal_lss(mol: Chem.Mol, gra: StereoMolGraph) -> StereoMolGraph:
+    """`gra` with a lone-pair `Tetrahedral` on exactly its pyramidal atoms.
+
+    stereomolgraph gives one only for a chiral tag, which is kept (with its parity) on
+    a pyramidal atom and dropped elsewhere; each other pyramidal atom gets an
+    undetermined one.
+    """
+    pyramidal = {atom.GetIdx() for atom in mol.GetAtoms() if _is_pyramidal(atom)}
+    for ls in gra.atom_stereo:
+        if None in ls.atoms and ls.atoms[0] not in pyramidal:
+            gra = remove_stereo(gra, ls.atoms[0])
+    has_ls = {ls.atoms[0] for ls in gra.atom_stereo}
+    return with_stereo(
+        gra,
+        *(
+            Tetrahedral(
+                atoms=(
+                    i,
+                    *(
+                        neighbor.GetIdx()
+                        for neighbor in mol.GetAtomWithIdx(i).GetNeighbors()
+                    ),
+                    None,
+                )
+            )
+            for i in sorted(pyramidal - has_ls)
+        ),
+    )
 
 
 def _fill_trivial_sites(gra: StereoMolGraph) -> StereoMolGraph:
