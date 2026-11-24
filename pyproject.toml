@@ -53,7 +53,8 @@ ignore = [
     "E501",    # long lines in docstrings and SMARTS
     "PLC0415", # imports inside the pool workers
     "ANN401", "FBT001", "ARG001", "N818", "S311", "S324", "DTZ011",
-    "C901", "PLR0912", "PLR0915",  # long check functions
+    "C901", "PLR0912", "PLR0913", "PLR0915", "PLR0917",  # long check functions
+    "S603", "S607",  # the report runs its own reproducers and git
 ]
 
 [tool.ruff.lint.pydocstyle]
