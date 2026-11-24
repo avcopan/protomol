@@ -2,6 +2,7 @@
 
 __version__ = "0.0.0"
 
+from . import examples
 from ._ccv import ts_graphs
 from ._display import display
 from ._json import from_json, to_json
@@ -61,6 +62,7 @@ __all__ = [
     "Tetrahedral",
     "TrigonalBipyramidal",
     "display",
+    "examples",
     "from_json",
     "from_smiles",
     "invert",

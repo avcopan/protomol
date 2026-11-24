@@ -58,6 +58,8 @@ A species given with full stereo needs no expansion:
 >>> gra = pm.from_smiles("C[C@@H](O)/C=C/C")   # one stereoisomer of pent-3-en-2-ol
 >>> pm.is_determined(gra)
 True
+>>> gra == pm.examples.species()                # the test graph in protomol.examples
+True
 
 ```
 
@@ -78,6 +80,8 @@ over through the channel's atom mapping:
 >>> ts.breaking, ts.forming            # an H moves from C0 to O2
 (((0, 3),), ((2, 3),))
 >>> pm.reactants(ts) == rct
+True
+>>> ts == pm.examples.abstraction_ts()  # the test graph in protomol.examples
 True
 >>> # the breaking C0-H3 in red, the forming O2-H3 in blue
 >>> pm.display(ts, atom_indices=True)  # doctest: +SKIP

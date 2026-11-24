@@ -96,8 +96,16 @@ graph leaves the axis undetermined, standing for either one:
 ```
 
 This C1=C2 bond is a low-T stereo element: the other resonance form puts the double
-bond at C0=C1, so a high-T scheme (InChI) drops it. Step 7 ships one of the two
-channels (the axis determined) as `pm.examples.stereoisomerization_ts()`.
+bond at C0=C1, so a high-T scheme (InChI) drops it. `protomol.examples` has one of the
+two channels, with the axis determined:
+
+```python
+>>> channel = pm.examples.stereoisomerization_ts()
+>>> change = pm.stereo_at(channel, (1, 2))
+>>> change.reactant == z, change.product == e, change.ts.parity
+(True, True, 1)
+
+```
 
 ::: {.callout-note}
 Planned: Phase 5 (`ts_graphs` with fleeting stereo).
