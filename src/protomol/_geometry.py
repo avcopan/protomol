@@ -27,6 +27,7 @@ _MIN_VOLUME = 0.3  # |det| of three unit-vector differences; ideal tetrahedron: 
 _MIN_COSINE = 0.3  # |cos| (planar) or |sin| (axial) of the dihedral between the ends
 
 _EMBED_ATTEMPTS = 100  # ETKDG random seeds 0, 1, …
+_PYRAMID_HEIGHT = 0.35  # Å of a pyramidal centre above its neighbours' plane
 _FRAGMENT_GAP = 3.0  # Å between the fragments of a disconnected graph, along x
 _FLIP_TAG = {
     Chem.ChiralType.CHI_TETRAHEDRAL_CW: Chem.ChiralType.CHI_TETRAHEDRAL_CCW,
@@ -107,7 +108,7 @@ def embed(gra: MolGraph | StereoMolGraph) -> Geometry:
         params.randomSeed = seed
         if rdDistGeom.EmbedMolecule(mol, params) != 0:
             continue
-        xyz = mol.GetConformer().GetPositions()
+        xyz = _pyramidalized(mol.GetConformer().GetPositions(), lss)
         wrong = [ls for ls in lss if _ls_from_coords(ls, xyz) != ls]
         if not wrong:
             coords = _spread_fragments(mol, xyz)
@@ -157,6 +158,35 @@ def _set_stereo_tags(mol: Chem.RWMol, lss: list[Stereo]) -> dict[int, Chem.Chira
                 else Chem.BondStereo.STEREOTRANS
             )
     return tags
+
+
+def _pyramidalized(xyz: _Coords, lss: list[Stereo]) -> _Coords:
+    """`xyz` with each flat centre of a determined three-neighbour LS made pyramidal.
+
+    ETKDG keeps an atom flat if RDKit calls it sp2, whatever its chiral tag: the N of an
+    N-acyl aziridine, or a radical centre. Each `Tetrahedral` with a `None` slot (a lone
+    pair or an unpaired electron) whose centre the coordinates leave undetermined is
+    moved `_PYRAMID_HEIGHT` out of its neighbours' plane, to the side of its parity.
+    """
+    xyz = np.array(xyz, dtype=np.float64)
+    for ls in lss:
+        if (
+            not isinstance(ls, Tetrahedral)
+            or None not in ls.atoms
+            or _tetrahedral_from_coords(ls, xyz).parity is not None
+        ):
+            continue
+        center = ls.atoms[0]
+        nbrs = [n for n in ls.atoms[1:] if n is not None]
+        normal = _unit(
+            np.cross(xyz[nbrs[1]] - xyz[nbrs[0]], xyz[nbrs[2]] - xyz[nbrs[0]])
+        )
+        foot = xyz[center] - np.dot(xyz[center] - xyz[nbrs[0]], normal) * normal
+        for sign in (1, -1):
+            xyz[center] = foot + sign * _PYRAMID_HEIGHT * normal
+            if _tetrahedral_from_coords(ls, xyz) == ls:
+                break
+    return xyz
 
 
 def _spread_fragments(mol: Chem.Mol, xyz: _Coords) -> _Coords:

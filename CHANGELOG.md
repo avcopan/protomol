@@ -25,6 +25,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - A site is filled as trivial only if it is trivial for every configuration of the other
   undetermined sites: the centres of 1,4-dimethylcyclohexane (cis/trans) and the
   pseudoasymmetric C of 2,3,4-trihydroxyglutaric acid stay undetermined.
+- Every site InChI keeps is a low-T site: arsines, selenoxides and selenonium ions get a
+  lone-pair `Tetrahedral`, and so does an N in a three-membered ring even when it is
+  conjugated (N-acyl, N-aryl aziridines). `embed` makes such a centre pyramidal when
+  ETKDG leaves it flat.
 
 ## [0.0.2] - 2026-11-24
 

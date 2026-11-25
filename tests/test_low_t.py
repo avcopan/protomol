@@ -115,6 +115,25 @@ CASES = [
     Case("C[S+](CC)CCC", "S1lp?", "", "a sulfonium ion"),
     Case("C[O+](CC)CCC", "", "", "an oxonium ion inverts too fast"),
     Case("C[CH-]CC", "", "", "a carbanion inverts too fast"),
+    # InChI's lone-pair sites, which low-T keeps too (P54, R1 and R3)
+    Case("C[As](CC)CCC", "As1lp?", "", "an arsine"),
+    Case("C[As](C)C", "As1lp:1", "", "trimethylarsine: trivial"),
+    Case("C[As@](F)Cl", "As1lp:1", "As1lp:1", "a given arsine"),
+    Case("C[Se](=O)CC", "Se1lp?", "", "a selenoxide, Se=O form"),
+    Case("C[Se+]([O-])CC", "Se1lp?", "", "a selenoxide, Se+-O- form"),
+    Case("C[Se+](CC)CCC", "Se1lp?", "", "a selenonium ion"),
+    Case("C[Se]CC", "", "", "a selenide: two neighbours"),
+    Case(
+        "CC(=O)N1CC1C",
+        "N3lp? C5?",
+        "C5?",
+        "an N-acyl aziridine: InChI keeps a 3-ring N even when conjugated",
+    ),
+    Case(
+        "CC(=O)N1CC1", "N3lp:1", "", "an N-acyl aziridine with two equal CH2: trivial"
+    ),
+    Case("C=CN1CC1C", "C0=C1:0 N2lp? C4?", "C0=C1:0 C4?", "an N-vinyl aziridine"),
+    Case("CC(=O)N1CCC1", "", "", "an N-acyl azetidine N is conjugated: planar"),
     # Double bonds
     Case("CC=CC", "C1=C2?", "C1=C2?", "an unspecified double bond"),
     Case("C/C=C/C", "C1=C2:0", "C1=C2:0", "a given double bond"),

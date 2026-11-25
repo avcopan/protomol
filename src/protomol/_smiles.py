@@ -34,7 +34,7 @@ from ._vendor.stereomolgraph.rdmol2graph import RDMol2StereoMolGraph
 _RDMOL_TO_SMG = RDMol2StereoMolGraph(
     resonance=True, lone_pair_stereo=True, stereo_complete=False
 )
-_PYRAMIDAL_SYMBOLS = frozenset({"N", "P", "S"})
+_PYRAMIDAL_SYMBOLS = frozenset({"N", "P", "As", "S", "Se"})
 _PYRAMIDAL_NEIGHBORS = 3
 _CHAIN_END_SUBSTITUENTS = 2
 _MAX_CONFIGURATIONS = 2**8
@@ -326,12 +326,15 @@ def _is_pi_atom(atom: Chem.Atom) -> bool:
 def _is_pyramidal(atom: Chem.Atom) -> bool:
     """Whether an atom is a pyramidal centre of the low-T scheme (ch. L1562, L1655).
 
-    Three neighbours and one lone pair (steric number 4), on N, P or S: amines,
-    phosphines, sulfoxides and sulfonium ions. The lone pair is counted in the Lewis
-    structure, so an onium N (no lone pair) is not one, and a sulfoxide is one in both
-    its S=O and S+-O- forms. An N next to a π system (a multiple bond or a radical
-    centre) is conjugated and planar, or inverts too fast to keep: amides, anilines,
-    enamines, nitrosamines, nitroxides and alpha-amino radicals. P and S stay pyramidal
+    Three neighbours and one lone pair (steric number 4), on N, P, As, S or Se: amines,
+    phosphines, arsines, sulfoxides, selenoxides, and sulfonium and selenonium ions.
+    The lone pair is counted in the Lewis structure, so an onium N (no lone pair) is
+    not one, and a sulfoxide is one in both its S=O and S+-O- forms. An N next to a π
+    system (a multiple bond or a radical centre) is conjugated and planar, or inverts
+    too fast to keep: amides, anilines, enamines, nitrosamines, nitroxides and
+    alpha-amino radicals.
+    An N in a three-membered ring is pyramidal even then (N-acyl and N-aryl aziridines),
+    so that every InChI site is a low-T site (P54, R1). P, As, S and Se stay pyramidal
     when conjugated (barriers ≥ 15 kcal/mol). O+ and C- centres invert too fast and
     are never pyramidal.
     """
@@ -342,7 +345,7 @@ def _is_pyramidal(atom: Chem.Atom) -> bool:
         or _lone_pairs(atom) != 1
     ):
         return False
-    if atom.GetSymbol() == "N":
+    if atom.GetSymbol() == "N" and not atom.IsInRingSize(3):
         return not _is_pi_atom(atom) and not any(
             _is_pi_atom(neighbor) for neighbor in atom.GetNeighbors()
         )
