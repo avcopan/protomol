@@ -12,15 +12,29 @@ stereomolgraph can't hold one (P45): for a graph with one, the canonical form ma
 depend on the input numbering.
 """
 
+from typing import overload
+
 from ._backend import canon_numbering
 from ._json import to_json
 from ._reaction import relabel, reverse
-from ._types import MolGraph, ReactionGraph, StereoMolGraph, StereoReactionGraph
+from ._types import (
+    AnyGraph,
+    MolGraph,
+    ReactionGraph,
+    StereoMolGraph,
+    StereoReactionGraph,
+)
 
 
+# The precise overload keeps the type (`MolGraph` in, `MolGraph` out); the `AnyGraph`
+# one accepts a union, which a constrained type variable rejects (P59).
+@overload
 def canonical_form[G: (MolGraph, StereoMolGraph, ReactionGraph, StereoReactionGraph)](
     gra: G,
-) -> tuple[G, tuple[int, ...]]:
+) -> tuple[G, tuple[int, ...]]: ...
+@overload
+def canonical_form(gra: AnyGraph) -> tuple[AnyGraph, tuple[int, ...]]: ...
+def canonical_form(gra: AnyGraph) -> tuple[AnyGraph, tuple[int, ...]]:
     """The canonical graph and the atom map to it: `(canonical, atom_map)`.
 
     Atom k of `canonical` is atom `atom_map[k]` of `gra` (AutoStorage's `atom_map`
@@ -38,9 +52,7 @@ def canonical_form[G: (MolGraph, StereoMolGraph, ReactionGraph, StereoReactionGr
     return relabel(gra, atom_map), atom_map
 
 
-def canonical_json[G: (MolGraph, StereoMolGraph, ReactionGraph, StereoReactionGraph)](
-    gra: G,
-) -> str:
+def canonical_json(gra: AnyGraph) -> str:
     """The JSON of the canonical graph: `to_json(canonical_form(gra)[0])`.
 
     The value AutoStorage stores for a graph identity (P47).
@@ -53,9 +65,17 @@ def canonical_json[G: (MolGraph, StereoMolGraph, ReactionGraph, StereoReactionGr
     return to_json(canonical)
 
 
+@overload
 def canonical_direction[R: (ReactionGraph, StereoReactionGraph)](
     gra: R,
-) -> tuple[R, bool]:
+) -> tuple[R, bool]: ...
+@overload
+def canonical_direction(
+    gra: ReactionGraph | StereoReactionGraph,
+) -> tuple[ReactionGraph | StereoReactionGraph, bool]: ...
+def canonical_direction(
+    gra: ReactionGraph | StereoReactionGraph,
+) -> tuple[ReactionGraph | StereoReactionGraph, bool]:
     """`gra` or its reverse with the smaller canonical JSON, and whether reversed.
 
     A reaction graph and its `reverse` describe one TS from the two sides, and their
@@ -72,7 +92,12 @@ def canonical_direction[R: (ReactionGraph, StereoReactionGraph)](
     >>> chosen == chosen2, flipped != flipped2
     (True, True)
     """
-    rev = reverse(gra)
+    # Narrowed per type: `reverse`'s type variable rejects the union
+    rev: ReactionGraph | StereoReactionGraph
+    if isinstance(gra, ReactionGraph):  # noqa: SIM108
+        rev = reverse(gra)
+    else:
+        rev = reverse(gra)
     if canonical_json(rev) < canonical_json(gra):
         return rev, True
     return gra, False

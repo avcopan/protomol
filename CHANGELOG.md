@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- `canonical_form`, `canonical_json`, `relabel` and `canonical_direction` accept a
+  union argument (`AnyGraph`, or `ReactionGraph | StereoReactionGraph` for
+  `canonical_direction`), which ty rejected before; a precise argument still gives the
+  precise type back (P59). Typing only.
+
 ## [0.0.3] - 2026-11-25
 
 ### Added

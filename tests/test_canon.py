@@ -12,9 +12,8 @@ import pytest
 
 import protomol as pm
 
-# Any: ty can't pass a union to the constrained type variables of relabel and
-# canonical_form
-type Graph = Any
+# A union: canonical_form, canonical_json and relabel take one (P59)
+type Graph = pm.AnyGraph
 
 
 def _but2ene_rotation_ts(parity: Literal[1, -1]) -> pm.StereoReactionGraph:
@@ -172,6 +171,24 @@ def test_empty_and_single_atom() -> None:
     assert pm.canonical_form(atom) == (atom, (0,))
 
 
+def test_union_and_precise_arguments_type_check() -> None:
+    """A union argument is accepted; a precise one keeps its type (P59, ty checks)."""
+    gra: pm.AnyGraph = pm.examples.species()
+    canonical, atom_map = pm.canonical_form(gra)
+    assert pm.relabel(gra, atom_map) == canonical
+    assert pm.canonical_json(gra) == pm.to_json(canonical)
+    rxn: pm.ReactionGraph | pm.StereoReactionGraph = pm.examples.abstraction_ts()
+    chosen, flipped = pm.canonical_direction(rxn)
+    assert chosen == (pm.reverse(pm.examples.abstraction_ts()) if flipped else rxn)
+    precise: pm.StereoMolGraph = pm.canonical_form(pm.examples.species())[0]
+    relabelled: pm.StereoMolGraph = pm.relabel(pm.examples.species(), atom_map)
+    direction: pm.StereoReactionGraph = pm.canonical_direction(
+        pm.examples.abstraction_ts()
+    )[0]
+    assert relabelled == precise
+    assert direction == chosen
+
+
 class TestCanonicalDirection:
     """`canonical_direction` picks the same direction for a TS and its reverse."""
 
@@ -180,7 +197,7 @@ class TestCanonicalDirection:
     )
     def test_reverse_gives_same_result(self, name: str) -> None:
         """G and reverse(g) give one graph, with opposite flags."""
-        gra = HARD_CASES[name]
+        gra: Any = HARD_CASES[name]  # Any: reverse's type variable rejects a union
         chosen, flipped = pm.canonical_direction(gra)
         again, flipped_again = pm.canonical_direction(pm.reverse(gra))
         assert chosen == again
@@ -189,7 +206,7 @@ class TestCanonicalDirection:
     @pytest.mark.parametrize("name", ["abstraction_ts", "but2ene_rotation_ts"])
     def test_flag_and_minimum(self, name: str) -> None:
         """The flag says whether the result is the reverse, and it has the min JSON."""
-        gra = HARD_CASES[name]
+        gra: Any = HARD_CASES[name]  # Any: reverse's type variable rejects a union
         chosen, flipped = pm.canonical_direction(gra)
         assert chosen == (pm.reverse(gra) if flipped else gra)
         both = (pm.canonical_json(gra), pm.canonical_json(pm.reverse(gra)))
@@ -198,17 +215,19 @@ class TestCanonicalDirection:
     def test_relabelled_stable(self) -> None:
         """100 random relabellings, in either direction, give one canonical value."""
         rng = random.Random(0)  # noqa: S311
-        gra = HARD_CASES["abstraction_ts"]
+        gra = pm.examples.abstraction_ts()
         expected = pm.canonical_json(pm.canonical_direction(gra)[0])
         for _ in range(100):
-            shuffled = _shuffled(gra, rng)
+            atom_map = list(range(len(gra.symbols)))
+            rng.shuffle(atom_map)
+            shuffled = pm.relabel(gra, atom_map)
             if rng.random() < 0.5:
                 shuffled = pm.reverse(shuffled)
             assert pm.canonical_json(pm.canonical_direction(shuffled)[0]) == expected
 
     def test_keeps_atom_indices(self) -> None:
         """The result has the input's atoms and bonds; only the direction differs."""
-        gra = HARD_CASES["abstraction_ts"]
+        gra = pm.examples.abstraction_ts()
         chosen, _ = pm.canonical_direction(gra)
         assert chosen.symbols == gra.symbols
         assert chosen.bonds == gra.bonds

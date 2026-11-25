@@ -10,6 +10,7 @@ from typing import Any, overload
 from ._stereo import AtropBond, PlanarBond, StereoChange
 from ._types import (
     _LS,
+    AnyGraph,
     GraphError,
     MolGraph,
     ReactionGraph,
@@ -158,9 +159,14 @@ def reverse[R: (ReactionGraph, StereoReactionGraph)](gra: R) -> R:
     return type(gra)(**data)
 
 
+# The `AnyGraph` overload accepts a union, which the type variable rejects (P59).
+@overload
 def relabel[G: (MolGraph, StereoMolGraph, ReactionGraph, StereoReactionGraph)](
     gra: G, atom_map: Sequence[int]
-) -> G:
+) -> G: ...
+@overload
+def relabel(gra: AnyGraph, atom_map: Sequence[int]) -> AnyGraph: ...
+def relabel(gra: AnyGraph, atom_map: Sequence[int]) -> AnyGraph:
     """The graph with atom k of the result = atom `atom_map[k]` of `gra`.
 
     Same direction as AutoStorage's link `atom_map` (P22), whose `atom_map[k]` is the
