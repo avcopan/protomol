@@ -1,7 +1,6 @@
 """Tests for the mirror-image functions and the canonical TS (P50, P60)."""
 
 import random
-from typing import Any
 
 import autogeom as ag
 import pytest
@@ -10,8 +9,9 @@ import protomol as pm
 
 from .test_canon import HARD_CASES, _but2ene_rotation_ts, _shuffled
 
-# Any: reverse's type variable rejects a union
-type Graph = Any
+# A union: reverse takes one (P76)
+type Graph = pm.AnyGraph
+type Reaction = pm.ReactionGraph | pm.StereoReactionGraph
 
 
 def _chiral_abstraction_ts() -> pm.StereoReactionGraph:
@@ -113,6 +113,16 @@ def test_is_chiral(name: str, *, chiral: bool) -> None:
     assert pm.is_chiral(HARD_CASES[name]) is chiral
 
 
+def test_is_chiral_ignores_direction() -> None:
+    """N inversion's mirror image is its own reverse: one achiral TS (P75)."""
+    gra = pm.reaction_graph(pm.from_smiles("C[N@](F)Cl"), pm.from_smiles("C[N@@](F)Cl"))
+    assert pm.canonical_json(pm.enantiomer(gra)) != pm.canonical_json(gra)
+    assert not pm.is_chiral(gra)
+    assert pm.canonical_enantiomer(gra) is gra
+    assert pm.is_chiral(CHIRAL_TS)
+    assert pm.is_chiral(pm.reverse(CHIRAL_TS))
+
+
 def test_is_chiral_planar_bond_and_undetermined() -> None:
     """A planar bond alone, or an undetermined centre, is achiral."""
     assert not pm.is_chiral(pm.from_smiles(r"C/C=C/C"))
@@ -152,7 +162,7 @@ def test_canonical_enantiomer_species_takes_the_smaller_json() -> None:
 @pytest.mark.parametrize(
     "gra", [CHIRAL_TS, pm.examples.stereoisomerization_ts(), _but2ene_rotation_ts(1)]
 )
-def test_canonical_enantiomer_ignores_direction(gra: Graph) -> None:
+def test_canonical_enantiomer_ignores_direction(gra: Reaction) -> None:
     """A reaction graph and its reverse pick the same mirror image (P60)."""
     chosen = pm.canonical_enantiomer(gra)
     assert pm.canonical_enantiomer(pm.reverse(gra)) == pm.reverse(chosen)
@@ -161,7 +171,7 @@ def test_canonical_enantiomer_ignores_direction(gra: Graph) -> None:
 # The canonical TS (P58, P60): canonical_direction(canonical_enantiomer(g))
 
 
-def _canonical_ts(gra: Graph) -> str:
+def _canonical_ts(gra: Reaction) -> str:
     return pm.canonical_json(pm.canonical_direction(pm.canonical_enantiomer(gra))[0])
 
 
@@ -174,7 +184,7 @@ def _canonical_ts(gra: Graph) -> str:
         pm.examples.abstraction_ts(),
     ],
 )
-def test_canonical_ts_is_shared_by_all_four_versions(gra: Graph) -> None:
+def test_canonical_ts_is_shared_by_all_four_versions(gra: Reaction) -> None:
     """A TS, its reverse, its mirror image and the mirror reversed give one result."""
     versions = (
         gra,
@@ -186,7 +196,9 @@ def test_canonical_ts_is_shared_by_all_four_versions(gra: Graph) -> None:
     rng = random.Random(0)  # noqa: S311
     for version in versions:
         assert _canonical_ts(version) == expected
-        assert _canonical_ts(_shuffled(version, rng)) == expected
+        shuffled = _shuffled(version, rng)
+        assert isinstance(shuffled, pm.ReactionGraph | pm.StereoReactionGraph)
+        assert _canonical_ts(shuffled) == expected
 
 
 def test_canonical_ts_versions_are_distinct() -> None:

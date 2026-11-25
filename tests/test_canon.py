@@ -197,7 +197,7 @@ class TestCanonicalDirection:
     )
     def test_reverse_gives_same_result(self, name: str) -> None:
         """G and reverse(g) give one graph, with opposite flags."""
-        gra: Any = HARD_CASES[name]  # Any: reverse's type variable rejects a union
+        gra: Any = HARD_CASES[name]  # Any: a HARD_CASES entry may be a species
         chosen, flipped = pm.canonical_direction(gra)
         again, flipped_again = pm.canonical_direction(pm.reverse(gra))
         assert chosen == again
@@ -206,7 +206,7 @@ class TestCanonicalDirection:
     @pytest.mark.parametrize("name", ["abstraction_ts", "but2ene_rotation_ts"])
     def test_flag_and_minimum(self, name: str) -> None:
         """The flag says whether the result is the reverse, and it has the min JSON."""
-        gra: Any = HARD_CASES[name]  # Any: reverse's type variable rejects a union
+        gra: Any = HARD_CASES[name]  # Any: a HARD_CASES entry may be a species
         chosen, flipped = pm.canonical_direction(gra)
         assert chosen == (pm.reverse(gra) if flipped else gra)
         both = (pm.canonical_json(gra), pm.canonical_json(pm.reverse(gra)))

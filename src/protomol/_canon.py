@@ -105,12 +105,7 @@ def canonical_direction(
     >>> chosen == chosen2, flipped != flipped2
     (True, True)
     """
-    # Narrowed per type: `reverse`'s type variable rejects the union
-    rev: ReactionGraph | StereoReactionGraph
-    if isinstance(gra, ReactionGraph):  # noqa: SIM108
-        rev = reverse(gra)
-    else:
-        rev = reverse(gra)
+    rev = reverse(gra)
     if canonical_json(rev) < canonical_json(gra):
         return rev, True
     return gra, False
@@ -127,6 +122,10 @@ def enantiomer[G: (MolGraph, StereoMolGraph, ReactionGraph, StereoReactionGraph)
     gra: G,
 ) -> G: ...
 @overload
+def enantiomer(
+    gra: ReactionGraph | StereoReactionGraph,
+) -> ReactionGraph | StereoReactionGraph: ...
+@overload
 def enantiomer(gra: AnyGraph) -> AnyGraph: ...
 def enantiomer(gra: AnyGraph) -> AnyGraph:
     """The mirror image: every chiral LS inverted, atom indices kept.
@@ -137,7 +136,8 @@ def enantiomer(gra: AnyGraph) -> AnyGraph:
     kept as they are. A graph without stereo fields is returned unchanged. Being
     index-aligned, the result needs no atom map: the geometry reflected through a
     plane is a geometry of it. A trivial site's fixed LS (a CH3 carbon's) is inverted
-    too, which describes the same configuration, so compare results by canonical JSON.
+    too, as reading the reflected geometry would give it (P75); it describes the same
+    configuration, so compare results by canonical JSON, not `==`.
 
     >>> from protomol import from_smiles
     >>> gra = from_smiles("C[C@H](O)/C=C/C")
@@ -169,7 +169,8 @@ def is_chiral(gra: AnyGraph) -> bool:
     """Whether the graph differs from its mirror image, up to atom numbering.
 
     `canonical_json(enantiomer(gra)) != canonical_json(gra)`. A reaction graph is
-    compared as it is directed.
+    compared in its canonical direction, since direction has nothing to do with
+    chirality (P75): N inversion, whose mirror image is its own reverse, is achiral.
 
     >>> from protomol import from_smiles
     >>> is_chiral(from_smiles("C[C@H](O)CC")), is_chiral(from_smiles("C[C@H](O)C"))
@@ -177,13 +178,17 @@ def is_chiral(gra: AnyGraph) -> bool:
     >>> is_chiral(from_smiles("C[C@@H](O)[C@@H](O)C"))  # meso
     False
     """
-    return canonical_json(enantiomer(gra)) != canonical_json(gra)
+    return _mirror_key(enantiomer(gra)) != _mirror_key(gra)
 
 
 @overload
 def canonical_enantiomer[
     G: (MolGraph, StereoMolGraph, ReactionGraph, StereoReactionGraph)
 ](gra: G) -> G: ...
+@overload
+def canonical_enantiomer(
+    gra: ReactionGraph | StereoReactionGraph,
+) -> ReactionGraph | StereoReactionGraph: ...
 @overload
 def canonical_enantiomer(gra: AnyGraph) -> AnyGraph: ...
 def canonical_enantiomer(gra: AnyGraph) -> AnyGraph:

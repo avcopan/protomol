@@ -344,7 +344,16 @@ def with_stereo(
     return StereoMolGraph(**data)
 
 
-def remove_stereo[G: (StereoMolGraph, StereoReactionGraph)](g: G, site: _Site) -> G:
+# The union overload accepts what the type variable rejects (P59, P76)
+@overload
+def remove_stereo[G: (StereoMolGraph, StereoReactionGraph)](g: G, site: _Site) -> G: ...
+@overload
+def remove_stereo(
+    g: StereoMolGraph | StereoReactionGraph, site: _Site
+) -> StereoMolGraph | StereoReactionGraph: ...
+def remove_stereo(
+    g: StereoMolGraph | StereoReactionGraph, site: _Site
+) -> StereoMolGraph | StereoReactionGraph:
     """A new graph without the LS or change at a site.
 
     >>> g = StereoMolGraph(

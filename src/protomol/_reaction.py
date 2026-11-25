@@ -137,7 +137,15 @@ def products(
     return _side(gra, "product")
 
 
-def reverse[R: (ReactionGraph, StereoReactionGraph)](gra: R) -> R:
+@overload
+def reverse[R: (ReactionGraph, StereoReactionGraph)](gra: R) -> R: ...
+@overload
+def reverse(
+    gra: ReactionGraph | StereoReactionGraph,
+) -> ReactionGraph | StereoReactionGraph: ...
+def reverse(
+    gra: ReactionGraph | StereoReactionGraph,
+) -> ReactionGraph | StereoReactionGraph:
     """The reverse reaction: breaking and forming swap, and so do the change slots.
 
     The TS slot of each change stays as it is.

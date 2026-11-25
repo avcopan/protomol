@@ -12,7 +12,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   types (P50, P60). `enantiomer` inverts every chiral LS (`Tetrahedral`, `AtropBond`,
   `TrigonalBipyramidal`, `Octahedral`, and a reaction graph's change slots), keeping
   planar bonds, undetermined LS and atom indices. `is_chiral` compares the canonical
-  JSON of the two. `canonical_enantiomer` returns whichever has the smaller canonical
+  JSON of the two, a reaction graph's in its canonical direction (P75: N inversion,
+  whose mirror image is its own reverse, is achiral). `canonical_enantiomer` returns whichever has the smaller canonical
   JSON (a tie keeps `g`); on a reaction graph each is compared in its canonical
   direction, so the choice doesn't depend on the direction.
 - The canonical TS, documented in `user_guide/02-identity.qmd` and tested:
@@ -24,7 +25,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `canonical_form`, `canonical_json`, `relabel` and `canonical_direction` accept a
   union argument (`AnyGraph`, or `ReactionGraph | StereoReactionGraph` for
   `canonical_direction`), which ty rejected before; a precise argument still gives the
-  precise type back (P59). Typing only.
+  precise type back (P59). So do `reverse` and `remove_stereo` (P76). Typing only.
 
 ## [0.0.3] - 2026-11-25
 
