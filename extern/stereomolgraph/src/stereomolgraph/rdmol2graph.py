@@ -67,7 +67,7 @@ class RDMol2StereoMolGraph:
     resonance: bool = True
     _max_resonance_structures: int = 1000
     _radical_resonance: bool = True
-    _min_trans_ring_size: int = 7
+    _min_trans_ring_size: int = 8
 
     def __call__(self, rdmol: Chem.Mol) -> StereoMolGraph:
         smg = self.smg_from_rdmol(rdmol)

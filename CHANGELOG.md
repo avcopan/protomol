@@ -38,8 +38,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - A single bond with a closed-shell partial double bond gets a `PlanarBond`: an N with
   three neighbours (not in a three-membered ring) on a C=O, C=S or N=O (amides,
   thioamides, carbamates, ureas, imides, hydroxamic acids, nitrosamines), and the C-C of
-  a vinyl carbonyl oxide (acrolein oxide's s-cis/s-trans). A ring of fewer than seven
-  atoms holds it cis (lactams). Esters, amidines, enamines and enones get none.
+  a vinyl carbonyl oxide (acrolein oxide's s-cis/s-trans). A ring of seven or fewer
+  atoms holds it cis (lactams, caprolactam included). Esters, amidines, enamines and
+  enones get none.
+- A ring of seven atoms holds a double bond cis, as InChI does: a cycloheptene C=C is
+  trivial, not undetermined (stereomolgraph's ring cutoff, fixed on the fork's
+  `protomol` branch).
 
 ## [0.0.2] - 2026-11-24
 

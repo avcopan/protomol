@@ -40,7 +40,7 @@ _PYRAMIDAL_NEIGHBORS = 3
 _RADICAL_HETEROATOMS = frozenset({"N", "O", "F", "Cl"})  # keep a sigma radical rigid
 _CHAIN_END_SUBSTITUENTS = 2
 _MAX_CONFIGURATIONS = 2**8
-_MIN_TRANS_RING_SIZE = 7  # stereomolgraph's: a smaller ring holds a planar bond cis
+_MIN_TRANS_RING_SIZE = 8  # as InChI: a smaller ring holds a planar bond cis
 # Single bonds with a partial double bond (P54, R6), as (end1, end2): an N with three
 # neighbours, not in a 3-ring, on a C=O, C=S or N=O (amides, thioamides, carbamates,
 # ureas, imides, hydroxamic acids, nitrosamines); the C-C of a vinyl carbonyl oxide

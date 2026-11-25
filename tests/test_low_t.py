@@ -158,6 +158,8 @@ CASES = [
     Case("CC=CC", "C1=C2?", "C1=C2?", "an unspecified double bond"),
     Case("C/C=C/C", "C1=C2:0", "C1=C2:0", "a given double bond"),
     Case("CC=C(C)C", "C1=C2:0", "C1=C2:0", "a trivial double bond"),
+    Case("C1=CCCCCC1", "C0=C1:0", "C0=C1?", "cycloheptene: a 7-ring holds it cis"),
+    Case("C1=CCCCCCC1", "C0=C1?", "C0=C1?", "cyclooctene: an 8-ring may be trans"),
     Case("CC=NC", "C1=N2?", "C1=N2?", "an imine (N inversion ≈ 25 kcal/mol)"),
     Case("CC=NO", "C1=N2?", "C1=N2?", "an oxime"),
     Case("CC=C=CC", "C1=C3?", "C1=C3?", "an allene's chain LS stays (P45)"),
@@ -210,7 +212,7 @@ CASES = [
     Case("CC(N)=O", "C1=N2:0", "", "acetamide: NH2, trivial"),
     Case("CN(C)N=O", "N1=N3:0", "", "N-nitrosodimethylamine: trivial"),
     Case("O=C1CCCN1C", "C1=N5:0", "", "a lactam: a 5-ring holds it cis"),
-    Case("O=C1CCCCCN1C", "C1=N7?", "", "a 7-ring lactam: not held, as for C=C"),
+    Case("O=C1CCCCCN1C", "C1=N7:0", "", "caprolactam: a 7-ring holds it cis, as C=C"),
     Case(
         "CC=CC=[O+][O-]",
         "C1=C2? C2=C3? C3=O4?",

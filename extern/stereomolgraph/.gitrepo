@@ -6,7 +6,7 @@
 [subrepo]
 	remote = git@github.com:avcopan/StereoMolGraph.git
 	branch = protomol
-	commit = db2a0943a301d6898c512becdb52aed5e4c457d3
-	parent = 5df0b2a924d0186b059da5793d4310d9db85ece8
+	commit = 456534d06eca124c8f4c7e309580c57d77b860c8
+	parent = 83c5090069e5d76d1439a6635a108f1587894418
 	method = merge
 	cmdver = 0.4.9
