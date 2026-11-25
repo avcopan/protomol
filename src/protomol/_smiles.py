@@ -38,6 +38,10 @@ _PYRAMIDAL_SYMBOLS = frozenset({"N", "P", "S"})
 _PYRAMIDAL_NEIGHBORS = 3
 _CHAIN_END_SUBSTITUENTS = 2
 _MAX_CONFIGURATIONS = 2**8
+_TETRAHEDRAL_TAGS = {
+    Chem.ChiralType.CHI_TETRAHEDRAL_CW: Chem.ChiralType.CHI_TETRAHEDRAL_CCW,
+    Chem.ChiralType.CHI_TETRAHEDRAL_CCW: Chem.ChiralType.CHI_TETRAHEDRAL_CW,
+}
 
 
 def from_smiles(
@@ -81,6 +85,7 @@ def from_smiles(
         msg = f"RDKit can't parse the SMILES {smiles!r}"
         raise GraphError(msg)
     _restore_nitrogen_chiral_tags(mol, smiles, params)
+    _place_lone_pairs_like_implicit_hs(mol)
     mol = Chem.AddHs(mol)
 
     formal_charge = sum(atom.GetFormalCharge() for atom in mol.GetAtoms())
@@ -117,6 +122,27 @@ def _restore_nitrogen_chiral_tags(
             and raw_atom.GetChiralTag() != unspecified
         ):
             atom.SetChiralTag(raw_atom.GetChiralTag())
+
+
+def _place_lone_pairs_like_implicit_hs(mol: Chem.Mol) -> None:
+    """Read a lone pair's place in a chiral centre's neighbour order like an implicit H.
+
+    OpenSMILES says where an implicit H goes (`[C@H]`: right after the preceding atom,
+    or the viewpoint if no atom precedes the centre) but not where a lone pair goes.
+    Open Babel and CDK put it where an implicit H would go; RDKit puts it last. The two
+    agree unless the centre starts its fragment, so there the tag is inverted:
+    `[N@](C)(F)Cl` is `C[N@@](F)Cl`. A centre starts its fragment when no neighbour
+    precedes it (`mol` is in SMILES order, before `AddHs`).
+    """
+    for atom in mol.GetAtoms():
+        tag = atom.GetChiralTag()
+        if (
+            tag in _TETRAHEDRAL_TAGS
+            and atom.GetDegree() == _PYRAMIDAL_NEIGHBORS
+            and atom.GetTotalNumHs() == 0
+            and all(n.GetIdx() > atom.GetIdx() for n in atom.GetNeighbors())
+        ):
+            atom.SetChiralTag(_TETRAHEDRAL_TAGS[tag])
 
 
 def _from_rdkit_mol(mol: Chem.Mol, *, charge: int, spin: int) -> StereoMolGraph:
