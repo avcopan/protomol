@@ -658,6 +658,39 @@ def build(rows: list[dict[str, Any]], results: Path, report: Path) -> str:
     return "\n".join(lines)
 
 
+def _fill_missing_geometries(rows: list[dict[str, Any]]) -> None:
+    """Look up the geometry of failed from_geometry rows that lack one.
+
+    Results written before canonical_stress.py kept the geometry on a from_geometry
+    error have none; read it back from the input files (a scan, so only when needed).
+    """
+    need = {
+        r["id"]: r
+        for r in rows
+        if r.get("geo_category") in ("no_lewis", "timeout", "error")
+        and "geo_symbols" not in r
+    }
+    if not need:
+        return
+    sys.path.insert(0, str(Path(__file__).parent))
+    import canonical_stress as cs
+
+    datasets = {i.split(":", 1)[0] for i in need}
+    specs = []
+    if "rgd1" in datasets:
+        specs = cs.rgd1_species(sample=False)
+    for spec in specs:
+        if spec["id"] in need:
+            need[spec["id"]]["geo_symbols"] = spec["symbols"]
+            need[spec["id"]]["geo_coords"] = spec["coords"]
+    if "stjohn" in datasets:
+        for spec in cs.stjohn_species(sample=False):
+            if spec["id"] in need:
+                geo = cs.parse_sdf(spec["sdf"])
+                need[spec["id"]]["geo_symbols"] = geo.get("symbols")
+                need[spec["id"]]["geo_coords"] = geo.get("coords")
+
+
 def main() -> None:
     """Command line."""
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
@@ -669,6 +702,7 @@ def main() -> None:
     )
     args = parser.parse_args()
     rows = load(args.results.expanduser())
+    _fill_missing_geometries(rows)
     kept = ""
     if args.report.exists():
         text = args.report.read_text()

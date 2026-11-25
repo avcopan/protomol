@@ -309,6 +309,7 @@ def check_species(spec: dict[str, Any], relabels: int, cap: int) -> dict[str, An
                 if isinstance(exc, pm.GraphError)
                 else "error"
             )
+            row["geo_symbols"], row["geo_coords"] = spec["symbols"], spec["coords"]
         row["t_from_geometry"] = time.perf_counter() - t
         if gg is not None:
             t = time.perf_counter()
