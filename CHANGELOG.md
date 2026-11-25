@@ -33,6 +33,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   electron in the `None` slot if the ring has a heteroatom (oxiranyl, aziridinyl) or the
   C bears an N, O, F or Cl (α-fluoro cyclopropyl); a plain cyclopropyl radical does not.
   `from_smiles` keeps a chiral tag on such a centre (`C[C@H]1O[C@]1C`).
+- An alkenyl or allenyl radical whose radical C bears an N, O, F or Cl keeps its bond or
+  chain LS (`F[C]=CC`), with the unpaired electron in a `None` slot.
 
 ## [0.0.2] - 2026-11-24
 

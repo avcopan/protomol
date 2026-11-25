@@ -172,6 +172,17 @@ CASES = [
     Case("C1=[C]CCCC1", "C0=C1:0", "C0=C1:0", "an alkenyl radical in a small ring"),
     Case("C[C]=C=CC", "", "C1=C3?", "an allenyl radical: its chain LS is left out"),
     Case("C=C[C]=CC", "C0=C1:0", "C0=C1:0 C2=C3?", "a dienyl radical's alkenyl bond"),
+    # Alkenyl radicals with an N, O, F or Cl on the radical C keep their LS (P54, R5)
+    Case(
+        "F[C]=CC", "C1=C2?", "C1=C2?", "an alpha-fluoro alkenyl radical (20 kcal/mol)"
+    ),
+    Case("Cl[C]=CC", "C1=C2?", "C1=C2?", "an alpha-chloro alkenyl radical (11)"),
+    Case("CO[C]=CC", "C2=C3?", "O1=C2? C2=C3?", "an alpha-methoxy alkenyl radical"),
+    Case("CN(C)[C]=CC", "C3=C4?", "N1=C3:0 C3=C4?", "an alpha-amino alkenyl radical"),
+    Case("Cl/[C]=C/C", "C1=C2:0", "C1=C2:0", "a given alpha-chloro alkenyl radical"),
+    Case("F[C]=C(C)C", "C1=C2:0", "C1=C2:0", "two equal methyls: trivial"),
+    Case("S[C]=CC", "", "C1=C2?", "an alpha-thio alkenyl radical inverts fast (5)"),
+    Case("F[C]=C=CC", "C1=C3?", "C1=C3?", "an alpha-fluoro allenyl radical"),
     # Charged resonance
     Case("CC(=O)[O-]", "", "", "acetate: neither C-O bond has a substituent on O"),
     Case("C[N+](=O)[O-]", "", "", "nitromethane"),

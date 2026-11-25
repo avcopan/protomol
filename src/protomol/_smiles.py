@@ -234,7 +234,9 @@ def _without_alkenyl_radical_bond_stereo(
     low-T scheme lumps them: the bond gets no LS. So does a chain whose end is a
     radical centre (allenyl). The test is on `mol`'s Lewis structure: a resonating
     bond of a π radical (allyl's C1=C2, written C=C[CH2]) is single there and keeps its
-    LS. In a ring the bond can't invert, and keeps it too.
+    LS. In a ring the bond can't invert, and keeps it too. So does a bond whose radical
+    C bears an N, O, F or Cl (P54, R5), which raises the barrier from 3 to 11-20
+    kcal/mol: its LS is a `PlanarBond` with the unpaired electron in a `None` slot.
     """
     for ls in gra.bond_stereo:
         end1, end2 = ls.atoms[2:4]
@@ -244,11 +246,17 @@ def _without_alkenyl_radical_bond_stereo(
             else ((end1, end2), (end2, end1))
         )
         for end, next_ in firsts:
+            atom = mol.GetAtomWithIdx(end)
             bond = mol.GetBondBetweenAtoms(end, next_)
             if (
-                mol.GetAtomWithIdx(end).GetNumRadicalElectrons() > 0
+                atom.GetNumRadicalElectrons() > 0
                 and bond.GetBondType() == Chem.BondType.DOUBLE
                 and not bond.IsInRing()
+                and not any(
+                    neighbor.GetSymbol() in _RADICAL_HETEROATOMS
+                    for neighbor in atom.GetNeighbors()
+                    if neighbor.GetIdx() != next_
+                )
             ):
                 gra = remove_stereo(gra, (end1, end2))
                 break
