@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- `enantiomer(g)`, `is_chiral(g)` and `canonical_enantiomer(g)` for the four graph
+  types (P50, P60). `enantiomer` inverts every chiral LS (`Tetrahedral`, `AtropBond`,
+  `TrigonalBipyramidal`, `Octahedral`, and a reaction graph's change slots), keeping
+  planar bonds, undetermined LS and atom indices. `is_chiral` compares the canonical
+  JSON of the two. `canonical_enantiomer` returns whichever has the smaller canonical
+  JSON (a tie keeps `g`); on a reaction graph each is compared in its canonical
+  direction, so the choice doesn't depend on the direction.
+
 ### Changed
 
 - `canonical_form`, `canonical_json`, `relabel` and `canonical_direction` accept a

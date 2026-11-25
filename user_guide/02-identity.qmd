@@ -114,6 +114,33 @@ True
 
 ```
 
+### Mirror images
+
+`enantiomer(gra)` is the mirror image: every chiral LS inverted (`Tetrahedral`,
+`AtropBond`, and a reaction graph's change slots too), planar bonds and undetermined LS
+kept, atom indices kept. `is_chiral(gra)` says whether it differs from `gra`, and
+`canonical_enantiomer(gra)` picks one of the two reproducibly, the one with the smaller
+canonical JSON (like InChI's `/m0`). That is the enantiomer AutoEngine computes, and
+AutoStorage stores the other as its mirror partner:
+
+```python
+>>> smg = pm.examples.species()
+>>> pm.is_chiral(smg), pm.is_chiral(pm.from_smiles("C[C@@H](O)[C@@H](O)C"))  # meso
+(True, False)
+>>> mirror = pm.enantiomer(smg)
+>>> pm.canonical_json(mirror) == pm.canonical_json(pm.from_smiles(r"C[C@H](O)/C=C/C"))
+True
+>>> pm.canonical_json(pm.canonical_enantiomer(smg)) == pm.canonical_json(
+...     pm.canonical_enantiomer(mirror)
+... )
+True
+
+```
+
+On a reaction graph the choice doesn't depend on the direction: each mirror image is
+compared in its canonical direction, and the winner is returned in the input's
+direction.
+
 The numbering doesn't see a chain LS (an allene or cumulene axis) yet, so for a graph
 with one the canonical form may depend on the input numbering.
 

@@ -1,4 +1,4 @@
-"""The canonical form of a graph, and its canonical JSON (P17, P22, P46).
+"""The canonical form of a graph, its canonical JSON (P17, P22, P46), and mirror images.
 
 The numbering is the back-end's `canon_atom_num` (stereomolgraph's `canon` branch),
 which sees the atoms, the bonds, the breaking and forming bonds, the LS and the stereo
@@ -12,17 +12,27 @@ stereomolgraph can't hold one (P45): for a graph with one, the canonical form ma
 depend on the input numbering.
 """
 
-from typing import overload
+from typing import Any, overload
 
 from ._backend import canon_numbering
 from ._json import to_json
 from ._reaction import relabel, reverse
+from ._stereo import (
+    AtropBond,
+    Octahedral,
+    StereoChange,
+    Tetrahedral,
+    TrigonalBipyramidal,
+    invert,
+)
 from ._types import (
+    _LS,
     AnyGraph,
     MolGraph,
     ReactionGraph,
     StereoMolGraph,
     StereoReactionGraph,
+    _fields,
 )
 
 
@@ -101,3 +111,110 @@ def canonical_direction(
     if canonical_json(rev) < canonical_json(gra):
         return rev, True
     return gra, False
+
+
+# Mirror images (P50, P60)
+
+# The kinds whose determined LS has a mirror image other than itself
+_CHIRAL_KINDS = (Tetrahedral, TrigonalBipyramidal, Octahedral, AtropBond)
+
+
+@overload
+def enantiomer[G: (MolGraph, StereoMolGraph, ReactionGraph, StereoReactionGraph)](
+    gra: G,
+) -> G: ...
+@overload
+def enantiomer(gra: AnyGraph) -> AnyGraph: ...
+def enantiomer(gra: AnyGraph) -> AnyGraph:
+    """The mirror image: every chiral LS inverted, atom indices kept.
+
+    `Tetrahedral`, `AtropBond`, `TrigonalBipyramidal` and `Octahedral` LS with a
+    parity flip it, and so do the slots of a reaction graph's stereo changes;
+    `PlanarBond` and `SquarePlanar` (their own mirror images) and undetermined LS are
+    kept as they are. A graph without stereo fields is returned unchanged. Being
+    index-aligned, the result needs no atom map: the geometry reflected through a
+    plane is a geometry of it. A trivial site's fixed LS (a CH3 carbon's) is inverted
+    too, which describes the same configuration, so compare results by canonical JSON.
+
+    >>> from protomol import from_smiles
+    >>> gra = from_smiles("C[C@H](O)/C=C/C")
+    >>> canonical_json(enantiomer(gra)) == canonical_json(
+    ...     from_smiles("C[C@@H](O)/C=C/C")
+    ... )
+    True
+    >>> enantiomer(enantiomer(gra)) == gra
+    True
+    """
+    if not isinstance(gra, StereoMolGraph | StereoReactionGraph):
+        return gra
+    data: dict[str, Any] = _fields(gra)
+    data["atom_stereo"] = [_mirror_ls(ls) for ls in gra.atom_stereo]
+    data["bond_stereo"] = [_mirror_ls(ls) for ls in gra.bond_stereo]
+    if isinstance(gra, StereoReactionGraph):
+        data["stereo_changes"] = [
+            StereoChange(
+                reactant=_mirror_slot(c.reactant),
+                product=_mirror_slot(c.product),
+                ts=_mirror_slot(c.ts),
+            )
+            for c in gra.stereo_changes
+        ]
+    return type(gra)(**data)
+
+
+def is_chiral(gra: AnyGraph) -> bool:
+    """Whether the graph differs from its mirror image, up to atom numbering.
+
+    `canonical_json(enantiomer(gra)) != canonical_json(gra)`. A reaction graph is
+    compared as it is directed.
+
+    >>> from protomol import from_smiles
+    >>> is_chiral(from_smiles("C[C@H](O)CC")), is_chiral(from_smiles("C[C@H](O)C"))
+    (True, False)
+    >>> is_chiral(from_smiles("C[C@@H](O)[C@@H](O)C"))  # meso
+    False
+    """
+    return canonical_json(enantiomer(gra)) != canonical_json(gra)
+
+
+@overload
+def canonical_enantiomer[
+    G: (MolGraph, StereoMolGraph, ReactionGraph, StereoReactionGraph)
+](gra: G) -> G: ...
+@overload
+def canonical_enantiomer(gra: AnyGraph) -> AnyGraph: ...
+def canonical_enantiomer(gra: AnyGraph) -> AnyGraph:
+    """`gra` or its `enantiomer`, whichever has the smaller canonical JSON.
+
+    A reproducible choice of one of two mirror images (like InChI's `/m0`); a tie
+    (an achiral graph) keeps `gra`. Atom indices are kept. On a reaction graph the
+    choice doesn't depend on its direction (P60): each of the two is compared in its
+    canonical direction, `canonical_json(canonical_direction(x)[0])`, and the winner
+    is returned in `gra`'s direction.
+
+    >>> from protomol import from_smiles
+    >>> r, s = from_smiles("C[C@H](O)CC"), from_smiles("C[C@@H](O)CC")
+    >>> canonical_json(canonical_enantiomer(r)) == canonical_json(s)
+    True
+    >>> canonical_enantiomer(s) == s
+    True
+    """
+    mirror = enantiomer(gra)
+    if _mirror_key(mirror) < _mirror_key(gra):
+        return mirror
+    return gra
+
+
+def _mirror_key(gra: AnyGraph) -> str:
+    """The canonical JSON, in the canonical direction for a reaction graph (P60)."""
+    if isinstance(gra, ReactionGraph | StereoReactionGraph):
+        return canonical_json(canonical_direction(gra)[0])
+    return canonical_json(gra)
+
+
+def _mirror_ls[S: _LS](ls: S) -> S:
+    return invert(ls) if isinstance(ls, _CHIRAL_KINDS) else ls
+
+
+def _mirror_slot(ls: _LS | None) -> _LS | None:
+    return None if ls is None else _mirror_ls(ls)

@@ -3,7 +3,14 @@
 __version__ = "0.0.3"
 
 from . import examples
-from ._canon import canonical_direction, canonical_form, canonical_json
+from ._canon import (
+    canonical_direction,
+    canonical_enantiomer,
+    canonical_form,
+    canonical_json,
+    enantiomer,
+    is_chiral,
+)
 from ._ccv import ts_graphs
 from ._compare import deduplicate, isomorphism
 from ._display import display
@@ -66,16 +73,19 @@ __all__ = [
     "Tetrahedral",
     "TrigonalBipyramidal",
     "canonical_direction",
+    "canonical_enantiomer",
     "canonical_form",
     "canonical_json",
     "deduplicate",
     "display",
     "embed",
+    "enantiomer",
     "examples",
     "from_geometry",
     "from_json",
     "from_smiles",
     "invert",
+    "is_chiral",
     "is_determined",
     "isomers",
     "isomorphism",
