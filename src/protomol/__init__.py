@@ -14,7 +14,12 @@ from ._canon import (
 from ._ccv import ts_graphs
 from ._compare import deduplicate, isomorphism
 from ._display import display
-from ._geometry import embed, from_geometry
+from ._geometry import (
+    GeometryMismatches,
+    embed,
+    from_geometry,
+    geometry_mismatches,
+)
 from ._json import from_json, to_json
 from ._low_t import low_t
 from ._reaction import (
@@ -60,6 +65,7 @@ __all__ = [
     "AtomStereo",
     "AtropBond",
     "BondStereo",
+    "GeometryMismatches",
     "GraphError",
     "MolGraph",
     "Octahedral",
@@ -84,6 +90,7 @@ __all__ = [
     "from_geometry",
     "from_json",
     "from_smiles",
+    "geometry_mismatches",
     "invert",
     "is_chiral",
     "is_determined",

@@ -27,16 +27,32 @@ True
 
 ## Checking a structure
 
-::: {.callout-note}
-Planned: Phase 3 (`stereo_matches`).
-:::
-
-A conformer search or an optimization can invert a centre or flip a bond. A structure is
-kept only if it is still the workflow's stereoisomer:
+A conformer search or an optimization can invert a centre, flip a bond or break one. A
+structure is kept only if it is still the workflow's graph. `geometry_mismatches` perceives
+the bonds from covalent radii, as `from_geometry` does, and reads each determined LS's
+parity from the coordinates. All three fields empty means they agree:
 
 ```python
-pm.stereo_matches(smg, geo)       # LS parities read from the coordinates
+>>> pm.geometry_mismatches(smg, geo)
+GeometryMismatches(missing_bonds=(), extra_bonds=(), stereo=())
+
 ```
+
+Each disagreement names its atoms: a bond as a pair, an LS by its site (the centre, or a
+bond's end pair). The (1S, 3Z) stereoisomer's structure contradicts both LS of the (1R, 3E)
+graph:
+
+```python
+>>> other = pm.embed(pm.from_smiles(r"C[C@H](O)/C=C\C"))
+>>> pm.geometry_mismatches(smg, other).stereo
+(1, (3, 4))
+
+```
+
+An LS the coordinates don't decide (a flat centre, a double bond twisted by about 90°) is
+not a mismatch, and neither is an undetermined one. On a reaction graph, only the bonds
+that neither break nor form and the LS that don't change are compared, so the end points
+of an IRC and the TS all agree with it (see [Reaction coordinate](03-reaction.qmd)).
 
 ## Perceiving a graph
 

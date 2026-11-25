@@ -237,3 +237,68 @@ def test_embed_no_lewis_structure() -> None:
     """A bare singlet C atom has no Lewis structure."""
     with pytest.raises(pm.GraphError, match="No Lewis structure"):
         pm.embed(pm.MolGraph(symbols=["C"], bonds=[]))
+
+
+AGREE = pm.GeometryMismatches(missing_bonds=(), extra_bonds=(), stereo=())
+
+
+@pytest.mark.parametrize("smiles", DETERMINED)
+def test_geometry_mismatches_agree(smiles: str) -> None:
+    """A graph agrees with its own embedding and with a geometry it was read from."""
+    gra = pm.from_smiles(smiles)
+    assert pm.geometry_mismatches(gra, pm.embed(gra)) == AGREE
+    geo = ag.from_smiles(smiles)
+    assert pm.geometry_mismatches(pm.from_geometry(geo), geo) == AGREE
+
+
+def test_geometry_mismatches_stereo() -> None:
+    """Each contradicted LS is named by its site, in site order."""
+    gra = pm.examples.species()
+    epimer = pm.embed(pm.from_smiles(r"C[C@H](O)/C=C/C"))
+    assert pm.geometry_mismatches(gra, epimer).stereo == (1,)
+    z_isomer = pm.embed(pm.from_smiles(r"C[C@@H](O)/C=C\C"))
+    assert pm.geometry_mismatches(gra, z_isomer).stereo == ((3, 4),)
+    both = pm.embed(pm.from_smiles(r"C[C@H](O)/C=C\C"))
+    assert pm.geometry_mismatches(gra, both).stereo == (1, (3, 4))
+
+
+def test_geometry_mismatches_undetermined() -> None:
+    """An undetermined LS, or a plain graph, has no stereo to contradict."""
+    geo = pm.embed(pm.from_smiles(r"C[C@H](O)/C=C\C"))
+    assert pm.geometry_mismatches(pm.from_smiles("CC(O)C=CC"), geo) == AGREE
+    plain = pm.without_stereo(pm.examples.species())
+    assert pm.geometry_mismatches(plain, geo) == AGREE
+
+
+def test_geometry_mismatches_bonds() -> None:
+    """A wrong bond is missing (in the graph only) and extra (in the geometry only)."""
+    gra = pm.MolGraph(symbols=["O", "H", "H"], bonds=[(0, 1), (1, 2)])
+    geo = pm.embed(pm.MolGraph(symbols=["O", "H", "H"], bonds=[(0, 1), (0, 2)]))
+    result = pm.geometry_mismatches(gra, geo)
+    assert result.missing_bonds == ((1, 2),)
+    assert result.extra_bonds == ((0, 2),)
+    assert result.stereo == ()
+
+
+def test_geometry_mismatches_reaction() -> None:
+    """A reaction graph agrees with either side's geometry (changing bonds skipped)."""
+    ts = pm.examples.abstraction_ts()
+    for side in (pm.reactants(ts), pm.products(ts)):
+        assert pm.geometry_mismatches(ts, pm.embed(side)) == AGREE
+
+
+def test_geometry_mismatches_reaction_stereo() -> None:
+    """Only the LS that don't change are compared on a reaction graph."""
+    ts = pm.examples.stereoisomerization_ts()
+    for side in (pm.reactants(ts), pm.products(ts)):
+        assert pm.geometry_mismatches(ts, pm.embed(side)) == AGREE
+    # Each side's geometry contradicts the other side at the changing bond
+    rct, prd = pm.reactants(ts), pm.products(ts)
+    assert pm.geometry_mismatches(rct, pm.embed(prd)).stereo == ((1, 2),)
+
+
+def test_geometry_mismatches_wrong_atoms() -> None:
+    """The geometry must have the graph's atoms, in order."""
+    geo = pm.embed(pm.from_smiles("CO"))
+    with pytest.raises(pm.GraphError, match="differ"):
+        pm.geometry_mismatches(pm.from_smiles("OC"), geo)

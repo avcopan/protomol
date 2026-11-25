@@ -133,18 +133,34 @@ True
 
 ```
 
+The sides index the IRC end points too, so `geometry_mismatches` checks each end point
+against the side it should be: the bonds, perceived from covalent radii, and the parity
+of every LS. Here an embedding of each side stands in for the IRC's end points:
+
+```python
+>>> fwd, bwd = pm.embed(prd), pm.embed(rct)   # stand in for the IRC's end points
+>>> pm.geometry_mismatches(prd, fwd)
+GeometryMismatches(missing_bonds=(), extra_bonds=(), stereo=())
+>>> pm.geometry_mismatches(prd, bwd).stereo   # the wrong end: (Z) at C1=C2
+((1, 2),)
+
+```
+
+On the TS graph itself, only the bonds that neither break nor form and the LS that don't
+change are compared, so it agrees with either end point:
+
+```python
+>>> pm.geometry_mismatches(ts, bwd) == pm.geometry_mismatches(ts, fwd)
+True
+
+```
+
 ::: {.callout-note}
-Planned: Phase 4 (`reacting_core`) and Phase 5 (`transition_state`, `inverted_stereo`,
-end-point atom maps).
+Planned: Phase 4 (`reacting_core`) and Phase 5 (`transition_state`, `inverted_stereo`).
 :::
 
 ```python
 core = pm.reacting_core(ts)     # atoms CREST freezes in a TS conformer search
-
-# IRC: perceive each end point and check it against the expected side (illustrative)
-fwd, bwd = run_irc(ts_geo)                                     # ae, illustrative
-ok = pm.without_stereo(pm.from_geometry(fwd)) == pm.without_stereo(prd)  # same bonds
-ok = ok and pm.stereo_matches(prd, fwd)                                  # same stereo
 ```
 
 Each side may hold several molecules. Splitting a side into its molecules, each with its

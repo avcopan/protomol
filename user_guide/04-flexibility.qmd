@@ -32,7 +32,20 @@ torsions in a TS core are rotors are pm open question 4.
 torsions = pm.rotatable_bonds(smg)       # bonds to sample; never one with a bond LS
 frozen = pm.reacting_core(ts)            # TS only: atoms CREST constrains
 conformers = run_crest(pm.embed(smg), constrain=frozen)        # ae, illustrative
-kept = [geo for geo in conformers if pm.stereo_matches(smg, geo)]
+```
+
+A conformer search can invert a centre or flip a bond, so each conformer is checked
+against the graph, and kept only if nothing disagrees. Here an embedding of the graph and
+of its mirror image stand in for CREST's conformers:
+
+```python
+>>> smg = pm.examples.species()
+>>> conformers = [pm.embed(smg), pm.embed(pm.enantiomer(smg))]  # stand in for CREST's
+>>> agree = pm.GeometryMismatches(missing_bonds=(), extra_bonds=(), stereo=())
+>>> kept = [geo for geo in conformers if pm.geometry_mismatches(smg, geo) == agree]
+>>> len(kept)
+1
+
 ```
 
 ## Scans for the partition function
@@ -55,11 +68,21 @@ MESS-PF also takes `smg.spin` (as 2S + 1) and the symmetry number.
 ## The kinetics network
 
 ::: {.callout-note}
-Planned: Phase 5 (`is_enantiomer`). The network API is open (am Phase 6).
+The network API is open (am Phase 6).
 :::
 
 ```python
 # Nodes are the identities of each TS's sides; enantiomeric nodes are lumped (illustrative)
 nodes = {identity(side) for ts in channels for side in (pm.reactants(ts), pm.products(ts))}
-pm.is_enantiomer(smg_a, smg_b)           # lump the pair and adjust sigma_eff
+```
+
+Two nodes are an enantiomeric pair, to lump and adjust sigma_eff, when one's mirror image
+has the other's canonical JSON:
+
+```python
+>>> smg_a = pm.examples.species()
+>>> smg_b = pm.from_smiles(r"C[C@H](O)/C=C/C")
+>>> pm.canonical_json(pm.enantiomer(smg_a)) == pm.canonical_json(smg_b)
+True
+
 ```

@@ -217,10 +217,12 @@ Planned: Phases 2 and 3. The AutoStorage side (`IdentityResult`, the registry, t
 ```python
 from autostorage import IdentityResult    # illustrative
 
+AGREE = pm.GeometryMismatches(missing_bonds=(), extra_bonds=(), stereo=())
+
 def smg_low_t(geo, gra, other_geos):      # registered as "smg_low_t@1", orders {0}
     if gra is None:                       # AutoStorage perceives one for order 0
         gra = pm.from_geometry(geo)
-    elif not pm.stereo_matches(gra, geo): # wrong stereoisomer: warn, perceive instead
+    elif pm.geometry_mismatches(gra, geo) != AGREE:  # warn, naming the atoms; perceive
         gra = pm.from_geometry(geo)
     low = fill_parities(pm.low_t(gra), geo)  # added sites read from geo (private, P57)
     can, atom_map = pm.canonical_form(low)

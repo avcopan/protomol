@@ -1,11 +1,14 @@
-"""`from_geometry` and `embed`: between graphs and autogeom geometries (P4).
+"""`from_geometry`, `embed` and `geometry_mismatches`: graphs and geometries (P4).
 
 Atom i of the graph is atom i of the geometry. `from_geometry` takes the LS sites
 `from_smiles` gives (the low-T approximation, through the same pipeline) and reads each
 site's parity from the coordinates. `embed` runs RDKit's ETKDG on the graph's Lewis
 structure, with its determined LS as constraints, and checks the result with the same
-parity readers.
+parity readers. `geometry_mismatches` compares a graph with a geometry through the same
+bond perception and parity readers (P61).
 """
+
+from dataclasses import dataclass
 
 import numpy as np
 from autogeom import Geometry, adjacency_matrix, rd
@@ -15,8 +18,16 @@ from rdkit.Chem import rdDistGeom
 
 from ._lewis import _lewis
 from ._smiles import _from_rdkit_mol
-from ._stereo import AtropBond, PlanarBond, Stereo, Tetrahedral
-from ._types import GraphError, MolGraph, StereoMolGraph, with_stereo
+from ._stereo import AtropBond, PlanarBond, Stereo, Tetrahedral, site
+from ._types import (
+    AnyGraph,
+    GraphError,
+    MolGraph,
+    ReactionGraph,
+    StereoMolGraph,
+    StereoReactionGraph,
+    with_stereo,
+)
 from ._vendor.stereomolgraph.coords import handedness
 
 type _Coords = np.ndarray[tuple[int, int], np.dtype[np.float64]]
@@ -59,14 +70,80 @@ def from_geometry(geo: Geometry) -> StereoMolGraph:
     Raises:
         GraphError: If no Lewis structure fits the bonds, charge and spin.
     """
-    amat = adjacency_matrix(geo, enforce_valence=True)
-    bonds = [(int(i), int(j)) for i, j in zip(*np.nonzero(np.triu(amat)), strict=True)]
+    bonds = _perceived_bonds(geo)
     try:
         mol = rd.from_connectivity(geo.symbols, bonds, charge=geo.charge, spin=geo.spin)
     except GeometryConversionError as err:
         raise GraphError(str(err)) from err
     gra = _from_rdkit_mol(mol, charge=geo.charge, spin=geo.spin)
     return _with_parities_from(gra, np.asarray(geo.coordinates, dtype=np.float64))
+
+
+@dataclass(frozen=True)
+class GeometryMismatches:
+    """Where a graph and a geometry disagree (`geometry_mismatches`).
+
+    Each field is a sorted tuple, and all three empty means they agree. There is no
+    `__bool__` (P48): test the fields.
+
+    Attributes:
+        missing_bonds: The graph's bonds that the geometry doesn't have.
+        extra_bonds: The geometry's bonds that the graph doesn't have.
+        stereo: The sites (as `site(ls)` gives them) of the LS whose parity the
+            geometry contradicts.
+    """
+
+    missing_bonds: tuple[tuple[int, int], ...]
+    extra_bonds: tuple[tuple[int, int], ...]
+    stereo: tuple[int | tuple[int, int], ...]
+
+
+def geometry_mismatches(gra: AnyGraph, geo: Geometry) -> GeometryMismatches:
+    """Where the graph and the geometry disagree, atom i on atom i.
+
+    Bonds are perceived from covalent radii as `from_geometry` perceives them, and each
+    determined LS's parity is read with `from_geometry`'s readers. An LS the
+    coordinates don't decide (a flat centre, a double bond twisted by about 90°) is
+    not a mismatch, and neither is an undetermined LS. On a reaction graph only the
+    bonds that neither break nor form and the LS that don't change are compared, so
+    the geometry may be either side's or the TS's.
+
+    >>> from protomol import embed, examples, from_smiles
+    >>> gra = examples.species()
+    >>> geometry_mismatches(gra, embed(gra))
+    GeometryMismatches(missing_bonds=(), extra_bonds=(), stereo=())
+    >>> geometry_mismatches(gra, embed(from_smiles(r"C[C@H](O)/C=C/C"))).stereo
+    (1,)
+
+    Raises:
+        GraphError: If the geometry's symbols differ from the graph's.
+        NotImplementedError: For an LS kind the readers don't read (only
+            `Tetrahedral`, `PlanarBond` and `AtropBond` are read).
+    """
+    if tuple(geo.symbols) != gra.symbols:
+        msg = f"The geometry's atoms {geo.symbols} differ from the graph's"
+        raise GraphError(msg)
+    changing: set[tuple[int, int]] = (
+        {*gra.breaking, *gra.forming}
+        if isinstance(gra, ReactionGraph | StereoReactionGraph)
+        else set()
+    )
+    have = set(gra.bonds) - changing
+    found = set(_perceived_bonds(geo)) - changing
+    stereo: list[int | tuple[int, int]] = []
+    if isinstance(gra, StereoMolGraph | StereoReactionGraph):
+        xyz = np.asarray(geo.coordinates, dtype=np.float64)
+        for ls in (*gra.atom_stereo, *gra.bond_stereo):
+            if ls.parity is None:
+                continue
+            read = _ls_from_coords(ls, xyz)
+            if read.parity is not None and read != ls:
+                stereo.append(site(ls))
+    return GeometryMismatches(
+        missing_bonds=tuple(sorted(have - found)),
+        extra_bonds=tuple(sorted(found - have)),
+        stereo=tuple(stereo),
+    )
 
 
 def embed(gra: MolGraph | StereoMolGraph) -> Geometry:
@@ -126,6 +203,12 @@ def embed(gra: MolGraph | StereoMolGraph) -> Geometry:
                 mol.GetAtomWithIdx(center).SetChiralTag(tags[center])
     msg = f"No embedding in {_EMBED_ATTEMPTS} attempts meets the LS of {gra}"
     raise GraphError(msg)
+
+
+def _perceived_bonds(geo: Geometry) -> list[tuple[int, int]]:
+    """The geometry's bonds from covalent radii (valences capped), as sorted pairs."""
+    amat = adjacency_matrix(geo, enforce_valence=True)
+    return [(int(i), int(j)) for i, j in zip(*np.nonzero(np.triu(amat)), strict=True)]
 
 
 def _set_stereo_tags(mol: Chem.RWMol, lss: list[Stereo]) -> dict[int, Chem.ChiralType]:
