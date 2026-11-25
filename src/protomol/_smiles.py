@@ -115,8 +115,8 @@ def _from_rdkit_mol(mol: Chem.Mol, *, charge: int, spin: int) -> StereoMolGraph:
 
     The low-T scheme `from_smiles` documents: stereomolgraph perceives the LS from the
     Lewis structure, its resonance structures and the chiral tags, then the chain LS,
-    the linear-end rule, the pyramidal atoms and the trivial sites. `from_geometry`
-    shares it.
+    the linear-end rule, the alkenyl radicals, the pyramidal atoms and the trivial
+    sites. `from_geometry` shares it.
     """
     try:
         gra = from_smg(_RDMOL_TO_SMG(mol), charge=charge, spin=spin)
@@ -125,6 +125,7 @@ def _from_rdkit_mol(mol: Chem.Mol, *, charge: int, spin: int) -> StereoMolGraph:
         for chain in _cumulated_chains(mol):
             gra = _with_chain_stereo(gra, chain, linear)
         gra = _without_linear_bond_stereo(gra, linear)
+        gra = _without_alkenyl_radical_bond_stereo(mol, gra)
         gra = _with_pyramidal_lss(mol, gra)
         return _fill_trivial_sites(gra)
     except ValidationError as err:
@@ -183,6 +184,36 @@ def _without_linear_bond_stereo(
         end1, end2 = ls.atoms[2:4]
         if not ls.chain and {end1, end2} & linear:
             gra = remove_stereo(gra, (end1, end2))
+    return gra
+
+
+def _without_alkenyl_radical_bond_stereo(
+    mol: Chem.Mol, gra: StereoMolGraph
+) -> StereoMolGraph:
+    """`gra` without the bond LS on an acyclic double bond with a radical end (L1648).
+
+    An alkenyl radical's cis and trans forms interconvert over a low barrier, so the
+    low-T scheme lumps them: the bond gets no LS. So does a chain whose end is a
+    radical centre (allenyl). The test is on `mol`'s Lewis structure: a resonating
+    bond of a π radical (allyl's C1=C2, written C=C[CH2]) is single there and keeps its
+    LS. In a ring the bond can't invert, and keeps it too.
+    """
+    for ls in gra.bond_stereo:
+        end1, end2 = ls.atoms[2:4]
+        firsts = (
+            ((end1, ls.chain[0]), (end2, ls.chain[-1]))
+            if ls.chain
+            else ((end1, end2), (end2, end1))
+        )
+        for end, next_ in firsts:
+            bond = mol.GetBondBetweenAtoms(end, next_)
+            if (
+                mol.GetAtomWithIdx(end).GetNumRadicalElectrons() > 0
+                and bond.GetBondType() == Chem.BondType.DOUBLE
+                and not bond.IsInRing()
+            ):
+                gra = remove_stereo(gra, (end1, end2))
+                break
     return gra
 
 

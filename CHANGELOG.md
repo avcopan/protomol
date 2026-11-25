@@ -17,6 +17,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   on each resonating double bond (stereomolgraph's radical resonance, fixed on the fork's
   `protomol` branch).
 - `from_smiles` keeps a chiral tag on a pyramidal N (`C[N@](F)Cl`), which RDKit drops.
+- An acyclic double bond or cumulated chain with a radical end (an alkenyl or allenyl
+  radical) gets no LS: the low-T scheme lumps its cis and trans forms.
 
 ## [0.0.2] - 2026-11-24
 

@@ -132,6 +132,8 @@ CASES = [
     ),
     Case("[CH]=CC", "", "C0=C1?", "an alkenyl radical"),
     Case("C1=[C]CCCC1", "C0=C1:0", "C0=C1:0", "an alkenyl radical in a small ring"),
+    Case("C[C]=C=CC", "", "C1=C3?", "an allenyl radical: its chain LS is left out"),
+    Case("C=C[C]=CC", "C0=C1:0", "C0=C1:0 C2=C3?", "a dienyl radical's alkenyl bond"),
     # Charged resonance
     Case("CC(=O)[O-]", "", "", "acetate: neither C-O bond has a substituent on O"),
     Case("C[N+](=O)[O-]", "", "", "nitromethane"),
@@ -160,12 +162,9 @@ CASES = [
 
 # The cases each later rule fixes, until it lands
 _TRIVIAL = "trivial sites are tested against the other sites' configurations"
-_ALKENYL = "alkenyl radical bonds get no LS"
 PENDING: dict[str, str] = {
     "CC1CCC(C)CC1": _TRIVIAL,
     "OC(=O)C(O)C(O)C(O)C(=O)O": _TRIVIAL,
-    "C[C]=CC": _ALKENYL,
-    "[CH]=CC": _ALKENYL,
 }
 # The round trip fails where `from_geometry`'s Lewis structure is another species than
 # the SMILES's: the geometry of this carbonyl oxide reads as a dienyl peroxy radical
