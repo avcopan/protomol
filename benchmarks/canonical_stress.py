@@ -22,7 +22,9 @@ Per species (a time cap of `--cap` seconds on each phase, every exception record
   3. the data for the duplicate check (hashes of the canonical JSON, standard InChI);
   4. the data for the InChI partition comparison (stereo-free canonical form vs InChI
      without stereo, full vs standard InChI), plus flags for categorizing disagreements;
-  5. the time of each step, against the heavy-atom count.
+  5. the time of each step, against the heavy-atom count;
+  6. `low_t` leaves the `from_smiles` and `from_geometry` graphs as they are (pm P57), with
+     the sites where it doesn't.
 
 The rows go to a JSON-lines file as they finish, so a run is resumable (a rerun skips the
 ids in the file); `parquet` converts it, `summary` prints the counts. The pool leaves two
@@ -188,6 +190,29 @@ def relabel_check(gra: Any, n: int, seed: str) -> tuple[int, str | None]:
     return bad, first
 
 
+def low_t_diff(gra: Any) -> list[str] | None:
+    """The sites where `low_t(gra)` differs from `gra` ("site: before -> after"), or None."""
+    import protomol as pm
+
+    low = pm.low_t(gra)
+    if low == gra:
+        return None
+
+    def by_site(g: Any) -> dict[Any, Any]:
+        return {pm.site(ls): ls for ls in (*g.atom_stereo, *g.bond_stereo)}
+
+    before, after = by_site(gra), by_site(low)
+    return [
+        f"{key}: {_ls_str(before.get(key))} -> {_ls_str(after.get(key))}"
+        for key in sorted(before.keys() | after.keys(), key=str)
+        if before.get(key) != after.get(key)
+    ]
+
+
+def _ls_str(ls: Any) -> str:
+    return "-" if ls is None else f"{ls.kind}:{ls.parity}"
+
+
 def inchis(smiles: str) -> dict[str, Any]:
     """Standard InChI, InChI without stereo, and structural flags, from the SMILES."""
     from rdkit import Chem
@@ -287,6 +312,11 @@ def check_species(spec: dict[str, Any], relabels: int, cap: int) -> dict[str, An
         except BaseException as exc:  # noqa: BLE001
             row["relabel_smiles_error"] = fail(exc)
         row["t_relabel"] = time.perf_counter() - t
+        try:
+            with capped(cap):
+                row["low_t_smiles_diff"] = low_t_diff(gs)
+        except BaseException as exc:  # noqa: BLE001
+            row["low_t_smiles_error"] = fail(exc)
 
     if spec.get("symbols") is not None and gs is not None:
         gg = None
@@ -309,6 +339,7 @@ def check_species(spec: dict[str, Any], relabels: int, cap: int) -> dict[str, An
                 if isinstance(exc, pm.GraphError)
                 else "error"
             )
+            row["geo_symbols"], row["geo_coords"] = spec["symbols"], spec["coords"]
         row["t_from_geometry"] = time.perf_counter() - t
         if gg is not None:
             t = time.perf_counter()
@@ -356,6 +387,11 @@ def check_species(spec: dict[str, Any], relabels: int, cap: int) -> dict[str, An
             except BaseException as exc:  # noqa: BLE001
                 row["relabel_geo_error"] = fail(exc)
             row["t_relabel_geo"] = time.perf_counter() - t
+            try:
+                with capped(cap):
+                    row["low_t_geo_diff"] = low_t_diff(gg)
+            except BaseException as exc:  # noqa: BLE001
+                row["low_t_geo_error"] = fail(exc)
     elif spec.get("symbols") is None:
         row["geo_category"] = f"no geometry ({spec.get('geo_status')})"
     return row
@@ -496,6 +532,21 @@ def summary(args: argparse.Namespace) -> None:
             f"  {label}: InChI classes split by canonical form: {sum(len(v) > 1 for v in i2c.values())}; "
             f"canonical classes split by InChI: {sum(len(v) > 1 for v in c2i.values())}"
         )
+    print("\n6. low_t(g) != g:")
+    for key in ("smiles", "geo"):
+        checked = [r for r in rows if f"low_t_{key}_diff" in r]
+        diff = [r for r in checked if r[f"low_t_{key}_diff"]]
+        err = [r for r in rows if f"low_t_{key}_error" in r]
+        print(
+            f"  {key}: {len(checked)} checked, {len(diff)} differ, {len(err)} errors; "
+            f"by dataset {dict(Counter(r['dataset'] for r in diff))}"
+        )
+        kinds = Counter(
+            change.split(": ", 1)[1] for r in diff for change in r[f"low_t_{key}_diff"]
+        )
+        print(f"    changes: {kinds.most_common(8)}")
+        for r in diff[:5]:
+            print(f"    {r['id']} {r['smiles']} {r[f'low_t_{key}_diff']}")
     print("\n5. slowest 5 (canonical_json of the SMILES graph):")
     for r in sorted((r for r in rows if "t_canon" in r), key=lambda r: -r["t_canon"])[
         :5

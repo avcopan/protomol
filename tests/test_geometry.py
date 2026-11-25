@@ -28,7 +28,8 @@ DETERMINED = [
     # Onium octets (autogeom 0.0.5): a + on C would lose the C=O+ / C=N+ PlanarBond
     r"C/C=[O+]/[O-]",  # syn Criegee intermediate
     r"C/C=[O+]\[O-]",  # anti
-    r"C=C/C=[O+]/[O-]",  # acrolein oxide
+    # Not acrolein oxide: SMILES can't write its C-C (s-cis/s-trans, an LS since P54
+    # R6); test_low_t.py round-trips it
     r"C/C=[N+](/[O-])C",  # a nitrone
 ]
 

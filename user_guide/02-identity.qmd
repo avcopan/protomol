@@ -95,11 +95,69 @@ True
 
 ```
 
+### Canonical direction
+
+A reaction graph and its `reverse` are one transition state seen from its two sides, but
+their canonical forms differ. `canonical_direction(gra)` returns whichever of the two has
+the smaller `canonical_json`, and whether it reversed; atom indices are kept:
+
+```python
+>>> ts = pm.examples.abstraction_ts()
+>>> chosen, flipped = pm.canonical_direction(ts)
+>>> again, flipped_again = pm.canonical_direction(pm.reverse(ts))
+>>> chosen == again, flipped != flipped_again
+(True, True)
+>>> pm.canonical_json(chosen) == min(
+...     pm.canonical_json(ts), pm.canonical_json(pm.reverse(ts))
+... )
+True
+
+```
+
 The numbering doesn't see a chain LS (an allene or cumulene axis) yet, so for a graph
 with one the canonical form may depend on the input numbering.
 
+## Stereo sites: the low-T scheme
+
+Which features of a species get an LS is a scheme. `from_smiles` and `from_geometry`
+use the low-T scheme (pm P54); `low_t` applies it to any graph. A plain graph gets the
+scheme's sites, undetermined unless they are trivial, so `low_t` is how a `MolGraph`
+gets its stereo sites:
+
+```python
+>>> amine = pm.from_smiles("C[N@](CC)C(C)O")
+>>> plain = pm.without_stereo(amine)
+>>> low = pm.low_t(plain)
+>>> [(ls.atoms[0], ls.parity) for ls in low.atom_stereo if ls.parity != 1]
+[(1, None), (4, None)]
+
+```
+
+The amine N and the CH centre are undetermined; the CH3 groups and the CH2 are trivial
+(parity 1). A site the graph already has keeps its parity, a site the scheme doesn't
+have loses its LS, and no parity is invented. So `low_t` leaves the output of
+`from_smiles` and `from_geometry` as it is, and applying it twice changes nothing:
+
+```python
+>>> pm.low_t(amine) == amine
+True
+>>> pm.low_t(low) == low
+True
+
+```
+
+A reaction graph's two sides are reassigned separately, and each `StereoChange` slot
+follows its side's site. The TS slots are kept as they are:
+
+```python
+>>> ts = pm.examples.stereoisomerization_ts()
+>>> pm.low_t(ts) == ts
+True
+
+```
+
 ::: {.callout-note}
-Planned: Phase 3 (`low_t`, `high_t`).
+Planned: January (`high_t`, InChI's rules) and Phase 5 (TS sites).
 :::
 
 ## An SMG identity algorithm
@@ -112,17 +170,17 @@ Planned: Phases 2 and 3. The AutoStorage side (`IdentityResult`, the registry, t
 ```python
 from autostorage import IdentityResult    # illustrative
 
-def smg_low_t(geo, gra, other_geos):      # registered as "smg_low_t@1", orders {0, 1}
-    if gra is None:                       # order 0 only; order 1 skips SMG identities
+def smg_low_t(geo, gra, other_geos):      # registered as "smg_low_t@1", orders {0}
+    if gra is None:                       # AutoStorage perceives one for order 0
         gra = pm.from_geometry(geo)
     elif not pm.stereo_matches(gra, geo): # wrong stereoisomer: warn, perceive instead
         gra = pm.from_geometry(geo)
-    can, atom_map = pm.canonical_form(pm.low_t(gra))
+    low = fill_parities(pm.low_t(gra), geo)  # added sites read from geo (private, P57)
+    can, atom_map = pm.canonical_form(low)
     return IdentityResult(value=pm.canonical_json(can), atom_map=atom_map)
 ```
 
-`smg@1` skips `low_t` (the graph as given), `smg_high_t@1` uses `high_t`, and `smg_conn@1`
-uses `pm.without_stereo`. The value is the canonical JSON; AutoStorage adds its hash
+`smg_high_t@1` uses `high_t`, and `smg_conn@1` uses `pm.without_stereo`. The value is the canonical JSON; AutoStorage adds its hash
 for the uniqueness index (pm P47).
 
 ## Storing and finding a point by its graph

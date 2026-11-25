@@ -14,7 +14,7 @@ depend on the input numbering.
 
 from ._backend import canon_numbering
 from ._json import to_json
-from ._reaction import relabel
+from ._reaction import relabel, reverse
 from ._types import MolGraph, ReactionGraph, StereoMolGraph, StereoReactionGraph
 
 
@@ -51,3 +51,28 @@ def canonical_json[G: (MolGraph, StereoMolGraph, ReactionGraph, StereoReactionGr
     """
     canonical, _ = canonical_form(gra)
     return to_json(canonical)
+
+
+def canonical_direction[R: (ReactionGraph, StereoReactionGraph)](
+    gra: R,
+) -> tuple[R, bool]:
+    """`gra` or its reverse with the smaller canonical JSON, and whether reversed.
+
+    A reaction graph and its `reverse` describe one TS from the two sides, and their
+    canonical forms differ. This picks one of them by comparing `canonical_json`, so
+    the result is the same for both, up to atom numbering if the two are equal (a
+    symmetric self-reaction, where a tie keeps `gra`). Atom indices are kept, so an
+    atom map from `canonical_form` of the result applies to the input's atoms as
+    they are. `canonical_form` itself stays faithful to its input.
+
+    >>> from protomol import examples
+    >>> ts = examples.abstraction_ts()
+    >>> chosen, flipped = canonical_direction(ts)
+    >>> chosen2, flipped2 = canonical_direction(reverse(ts))
+    >>> chosen == chosen2, flipped != flipped2
+    (True, True)
+    """
+    rev = reverse(gra)
+    if canonical_json(rev) < canonical_json(gra):
+        return rev, True
+    return gra, False

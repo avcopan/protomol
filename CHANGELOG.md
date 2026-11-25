@@ -6,6 +6,63 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- `low_t(g)` for `MolGraph | StereoMolGraph` (giving a `StereoMolGraph`) and
+  `ReactionGraph | StereoReactionGraph` (giving a `StereoReactionGraph`): the low-T
+  scheme's sites, perceived on a Lewis structure of the graph. A site the graph has
+  keeps its LS and parity, a site the scheme drops loses its LS, and an added site is
+  undetermined, or fixed if trivial. A reaction graph's sides are reassigned
+  separately; each `StereoChange` slot follows its side's site, and the TS slots are
+  kept. It is idempotent and a no-op on `from_smiles` and `from_geometry` output, but
+  for a carbonyl-oxide radical whose perceived Lewis structure is a peroxy radical
+  (open question 11).
+- `canonical_direction(gra) -> (graph, reversed)` for a `ReactionGraph` or
+  `StereoReactionGraph`: `gra` or `reverse(gra)`, whichever has the smaller
+  `canonical_json`, and whether it was reversed (a tie keeps `gra`). Atom indices are
+  kept, so an atom map from `canonical_form` of the result applies to the input's atoms.
+  A reaction graph and its reverse give the same result, so one TS imported in either
+  direction gets one identity.
+
+### Changed
+
+- `from_smiles` and `from_geometry` put a lone-pair `Tetrahedral` on exactly the
+  pyramidal atoms of the low-T scheme: N, P or S with three neighbours and one lone pair
+  (amines, phosphines, sulfoxides, sulfonium ions), but not an N next to a π system or
+  a radical centre (amides, anilines, enamines, nitroxides, α-amino radicals). Phosphines
+  and sulfoxides used to get one only from a chiral tag.
+- Radicals with formal charges, and vinoxy radicals from their carbonyl form, get an LS
+  on each resonating double bond (stereomolgraph's radical resonance, fixed on the fork's
+  `protomol` branch).
+- `from_smiles` keeps a chiral tag on a pyramidal N (`C[N@](F)Cl`), which RDKit drops.
+- A chiral centre with a lone pair that starts its SMILES fragment reads the lone pair
+  where an implicit H would go (Open Babel, CDK), not last (RDKit): `[N@](C)(F)Cl` is
+  `C[N@@](F)Cl`. This flips atom-first N, P and S centres.
+- An acyclic double bond or cumulated chain with a radical end (an alkenyl or allenyl
+  radical) gets no LS: the low-T scheme lumps its cis and trans forms.
+- A site is filled as trivial only if it is trivial for every configuration of the other
+  undetermined sites: the centres of 1,4-dimethylcyclohexane (cis/trans) and the
+  pseudoasymmetric C of 2,3,4-trihydroxyglutaric acid stay undetermined.
+- Every site InChI keeps is a low-T site: arsines, selenoxides and selenonium ions get a
+  lone-pair `Tetrahedral`, and so does an N in a three-membered ring even when it is
+  conjugated (N-acyl, N-aryl aziridines). `embed` makes such a centre pyramidal when
+  ETKDG leaves it flat.
+- A σ-radical C in a three-membered ring gets a `Tetrahedral` with its unpaired
+  electron in the `None` slot if the ring has a heteroatom (oxiranyl, aziridinyl) or the
+  C bears an N, O, F or Cl (α-fluoro cyclopropyl); a plain cyclopropyl radical does not.
+  `from_smiles` keeps a chiral tag on such a centre (`C[C@H]1O[C@]1C`).
+- An alkenyl or allenyl radical whose radical C bears an N, O, F or Cl keeps its bond or
+  chain LS (`F[C]=CC`), with the unpaired electron in a `None` slot.
+- A single bond with a closed-shell partial double bond gets a `PlanarBond`: an N with
+  three neighbours (not in a three-membered ring) on a C=O, C=S or N=O (amides,
+  thioamides, carbamates, ureas, imides, hydroxamic acids, nitrosamines), and the C-C of
+  a vinyl carbonyl oxide (acrolein oxide's s-cis/s-trans). A ring of seven or fewer
+  atoms holds it cis (lactams, caprolactam included). Esters, amidines, enamines and
+  enones get none.
+- A ring of seven atoms holds a double bond cis, as InChI does: a cycloheptene C=C is
+  trivial, not undetermined (stereomolgraph's ring cutoff, fixed on the fork's
+  `protomol` branch).
+
 ## [0.0.2] - 2026-11-24
 
 ### Added
