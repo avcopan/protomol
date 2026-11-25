@@ -77,6 +77,13 @@ CASES = [
         "open question 9: RDKit's parser drops a chiral tag on N",
     ),
     Case("C[N@@](F)Cl", "N1lp:-1", "N1lp?", "open question 9, the other parity"),
+    Case(
+        "[N@](C)(F)Cl",
+        "N0lp:1",
+        "N0lp?",
+        "atom-first: the same parity as C[N@](F)Cl, as RDKit reads [P@](C)(F)Cl",
+    ),
+    Case("CC(=O)[N@](C)CC", "", "", "a tag on an amide N is dropped"),
     Case("CC1CN1C", "C1? N3lp?", "C1? N3lp?", "an aziridine N"),
     Case("CN(O)CC", "N1lp?", "N1lp?", "a hydroxylamine N"),
     Case("CN(N)CC", "N1lp?", "N1lp?", "a hydrazine N"),
@@ -153,13 +160,10 @@ CASES = [
 
 # The cases each later rule fixes, until it lands
 _TRIVIAL = "trivial sites are tested against the other sites' configurations"
-_N_TAG = "a chiral tag on N is kept"
 _ALKENYL = "alkenyl radical bonds get no LS"
 PENDING: dict[str, str] = {
     "CC1CCC(C)CC1": _TRIVIAL,
     "OC(=O)C(O)C(O)C(O)C(=O)O": _TRIVIAL,
-    "C[N@](F)Cl": _N_TAG,
-    "C[N@@](F)Cl": _N_TAG,
     "C[C]=CC": _ALKENYL,
     "[CH]=CC": _ALKENYL,
 }

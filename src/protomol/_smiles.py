@@ -71,6 +71,7 @@ def from_smiles(
     if mol is None:
         msg = f"RDKit can't parse the SMILES {smiles!r}"
         raise GraphError(msg)
+    _restore_nitrogen_chiral_tags(mol, smiles, params)
     mol = Chem.AddHs(mol)
 
     formal_charge = sum(atom.GetFormalCharge() for atom in mol.GetAtoms())
@@ -83,6 +84,30 @@ def from_smiles(
     if spin is None:
         spin = sum(atom.GetNumRadicalElectrons() for atom in mol.GetAtoms())
     return _from_rdkit_mol(mol, charge=formal_charge, spin=spin)
+
+
+def _restore_nitrogen_chiral_tags(
+    mol: Chem.Mol, smiles: str, params: Chem.SmilesParserParams
+) -> None:
+    """Put back the chiral tags on N that RDKit's sanitization drops (open question 9).
+
+    RDKit keeps a tag on N only in a small ring or at a bridgehead; an unsanitized parse
+    keeps them all. Each N of `mol` (sanitized, same atom order) whose tag was dropped
+    gets the tag of the unsanitized parse. `_with_pyramidal_lss` then drops it again
+    where the N isn't pyramidal (an amide, an aniline, ...).
+    """
+    unsanitized_params = Chem.SmilesParserParams()
+    unsanitized_params.removeHs = params.removeHs
+    unsanitized_params.sanitize = False
+    raw = Chem.MolFromSmiles(smiles, unsanitized_params)
+    unspecified = Chem.ChiralType.CHI_UNSPECIFIED
+    for atom, raw_atom in zip(mol.GetAtoms(), raw.GetAtoms(), strict=True):
+        if (
+            atom.GetSymbol() == "N"
+            and atom.GetChiralTag() == unspecified
+            and raw_atom.GetChiralTag() != unspecified
+        ):
+            atom.SetChiralTag(raw_atom.GetChiralTag())
 
 
 def _from_rdkit_mol(mol: Chem.Mol, *, charge: int, spin: int) -> StereoMolGraph:

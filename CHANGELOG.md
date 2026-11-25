@@ -16,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Radicals with formal charges, and vinoxy radicals from their carbonyl form, get an LS
   on each resonating double bond (stereomolgraph's radical resonance, fixed on the fork's
   `protomol` branch).
+- `from_smiles` keeps a chiral tag on a pyramidal N (`C[N@](F)Cl`), which RDKit drops.
 
 ## [0.0.2] - 2026-11-24
 
