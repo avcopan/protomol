@@ -9,7 +9,8 @@ their stereoisomers lumped (L1648-1651).
 
 Each case gives a SMILES, the sites the low-T scheme puts an LS on, and what Phase 1's
 approximation gave (`today`, before the low-T rules; kept as the record of what
-changed). A site is written `C1` (a `Tetrahedral`), `N1lp` (one with a lone pair) or
+changed). A site is written `C1` (a `Tetrahedral`), `N1lp` (one with a `None` slot: a
+lone pair, or the unpaired electron of a pyramidal radical) or
 `C1=C2` (a bond LS), followed by `?` if it is undetermined or `:parity` if it is fixed
 (given in the SMILES, or trivial). `Tetrahedral` sites on an atom with two or more H
 (CH3, CH2, NH2) are left out of the strings: they are always there and trivial.
@@ -134,6 +135,20 @@ CASES = [
     ),
     Case("C=CN1CC1C", "C0=C1:0 N2lp? C4?", "C0=C1:0 C4?", "an N-vinyl aziridine"),
     Case("CC(=O)N1CCC1", "", "", "an N-acyl azetidine N is conjugated: planar"),
+    # Pyramidal radical centres (P54, R4): the unpaired electron takes the None slot
+    Case(
+        "CC1O[C]1C",
+        "C1? C3lp?",
+        "C1?",
+        "2,3-dimethyloxiran-2-yl: a sigma radical in a 3-ring with O (7 kcal/mol)",
+    ),
+    Case("C[C@H]1O[C@]1C", "C1:1 C3lp:1", "C1:1", "a given oxiranyl radical"),
+    Case("[CH]1CO1", "C0lp?", "", "oxiranyl (5 kcal/mol)"),
+    Case("C1N[C]1C", "N1lp? C2lp?", "N1lp?", "an aziridinyl radical"),
+    Case("C1C[C]1F", "C2lp:1", "", "an alpha-fluoro cyclopropyl radical: trivial"),
+    Case("C1C[C]1C", "", "", "a plain cyclopropyl radical inverts too fast (3-4)"),
+    Case("C[C](O)C", "", "", "an acyclic alpha-hydroxy radical is planar"),
+    Case("C=C[C]1CO1", "C0=C1:0 C1=C2?", "C0=C1:0 C1=C2?", "a π (allylic) radical"),
     # Double bonds
     Case("CC=CC", "C1=C2?", "C1=C2?", "an unspecified double bond"),
     Case("C/C=C/C", "C1=C2:0", "C1=C2:0", "a given double bond"),

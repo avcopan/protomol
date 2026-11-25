@@ -36,6 +36,7 @@ _RDMOL_TO_SMG = RDMol2StereoMolGraph(
 )
 _PYRAMIDAL_SYMBOLS = frozenset({"N", "P", "As", "S", "Se"})
 _PYRAMIDAL_NEIGHBORS = 3
+_RADICAL_HETEROATOMS = frozenset({"N", "O", "F", "Cl"})  # keep a sigma radical rigid
 _CHAIN_END_SUBSTITUENTS = 2
 _MAX_CONFIGURATIONS = 2**8
 _TETRAHEDRAL_TAGS = {
@@ -84,7 +85,7 @@ def from_smiles(
     if mol is None:
         msg = f"RDKit can't parse the SMILES {smiles!r}"
         raise GraphError(msg)
-    _restore_nitrogen_chiral_tags(mol, smiles, params)
+    _restore_dropped_chiral_tags(mol, smiles, params)
     _place_lone_pairs_like_implicit_hs(mol)
     mol = Chem.AddHs(mol)
 
@@ -100,15 +101,16 @@ def from_smiles(
     return _from_rdkit_mol(mol, charge=formal_charge, spin=spin)
 
 
-def _restore_nitrogen_chiral_tags(
+def _restore_dropped_chiral_tags(
     mol: Chem.Mol, smiles: str, params: Chem.SmilesParserParams
 ) -> None:
-    """Put back the chiral tags on N that RDKit's sanitization drops (open question 9).
+    """Put back the chiral tags on N and radical C that RDKit's sanitization drops.
 
-    RDKit keeps a tag on N only in a small ring or at a bridgehead; an unsanitized parse
-    keeps them all. Each N of `mol` (sanitized, same atom order) whose tag was dropped
-    gets the tag of the unsanitized parse. `_with_pyramidal_lss` then drops it again
-    where the N isn't pyramidal (an amide, an aniline, ...).
+    RDKit keeps a tag on N only in a small ring or at a bridgehead (open question 9),
+    and never on a radical C; an unsanitized parse keeps them all. Each N or radical C
+    of `mol` (sanitized, same atom order) whose tag was dropped gets the tag of the
+    unsanitized parse. `_with_pyramidal_lss` then drops it again where the atom isn't
+    pyramidal (an amide N, a plain cyclopropyl radical, ...).
     """
     unsanitized_params = Chem.SmilesParserParams()
     unsanitized_params.removeHs = params.removeHs
@@ -117,7 +119,7 @@ def _restore_nitrogen_chiral_tags(
     unspecified = Chem.ChiralType.CHI_UNSPECIFIED
     for atom, raw_atom in zip(mol.GetAtoms(), raw.GetAtoms(), strict=True):
         if (
-            atom.GetSymbol() == "N"
+            (atom.GetSymbol() == "N" or atom.GetNumRadicalElectrons() > 0)
             and atom.GetChiralTag() == unspecified
             and raw_atom.GetChiralTag() != unspecified
         ):
@@ -132,7 +134,8 @@ def _place_lone_pairs_like_implicit_hs(mol: Chem.Mol) -> None:
     Open Babel and CDK put it where an implicit H would go; RDKit puts it last. The two
     agree unless the centre starts its fragment, so there the tag is inverted:
     `[N@](C)(F)Cl` is `C[N@@](F)Cl`. A centre starts its fragment when no neighbour
-    precedes it (`mol` is in SMILES order, before `AddHs`).
+    precedes it (`mol` is in SMILES order, before `AddHs`). An unpaired electron (a
+    pyramidal radical centre) is read the same way.
     """
     for atom in mol.GetAtoms():
         tag = atom.GetChiralTag()
@@ -352,14 +355,50 @@ def _is_pyramidal(atom: Chem.Atom) -> bool:
     return True
 
 
-def _with_pyramidal_lss(mol: Chem.Mol, gra: StereoMolGraph) -> StereoMolGraph:
-    """`gra` with a lone-pair `Tetrahedral` on exactly its pyramidal atoms.
+def _is_pyramidal_radical(atom: Chem.Atom) -> bool:
+    """Whether an atom is a pyramidal radical centre of the low-T scheme (P54, R4).
 
+    A sigma-radical C (one unpaired electron, three neighbours, single bonds, no π
+    neighbour) in a three-membered ring that contains a heteroatom (oxiranyl,
+    aziridinyl) or with an N, O, F or Cl substituent: these invert over ≥ 5 kcal/mol
+    (oxiranyl 5-7, alpha-heteroatom 14-25). A plain cyclopropyl radical (3-4) is left
+    out, like an alkenyl radical, and so is an acyclic radical centre, which is planar.
+    """
+    if (
+        atom.GetSymbol() != "C"
+        or atom.GetNumRadicalElectrons() != 1
+        or atom.GetDegree() != _PYRAMIDAL_NEIGHBORS
+        or not atom.IsInRingSize(3)
+        or any(bond.GetBondType() != Chem.BondType.SINGLE for bond in atom.GetBonds())
+        or any(_is_pi_atom(neighbor) for neighbor in atom.GetNeighbors())
+    ):
+        return False
+    mol = atom.GetOwningMol()
+    in_3_ring = (
+        mol.GetAtomWithIdx(j)
+        for ring in mol.GetRingInfo().AtomRings()
+        if len(ring) == 3 and atom.GetIdx() in ring  # noqa: PLR2004
+        for j in ring
+    )
+    return any(other.GetSymbol() != "C" for other in in_3_ring) or any(
+        neighbor.GetSymbol() in _RADICAL_HETEROATOMS for neighbor in atom.GetNeighbors()
+    )
+
+
+def _with_pyramidal_lss(mol: Chem.Mol, gra: StereoMolGraph) -> StereoMolGraph:
+    """`gra` with a `Tetrahedral` with a `None` slot on exactly its pyramidal atoms.
+
+    The pyramidal atoms are the lone-pair centres (`_is_pyramidal`) and the radical
+    centres (`_is_pyramidal_radical`), whose unpaired electron takes the `None` slot.
     stereomolgraph gives one only for a chiral tag, which is kept (with its parity) on
     a pyramidal atom and dropped elsewhere; each other pyramidal atom gets an
     undetermined one.
     """
-    pyramidal = {atom.GetIdx() for atom in mol.GetAtoms() if _is_pyramidal(atom)}
+    pyramidal = {
+        atom.GetIdx()
+        for atom in mol.GetAtoms()
+        if _is_pyramidal(atom) or _is_pyramidal_radical(atom)
+    }
     for ls in gra.atom_stereo:
         if None in ls.atoms and ls.atoms[0] not in pyramidal:
             gra = remove_stereo(gra, ls.atoms[0])
