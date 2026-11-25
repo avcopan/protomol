@@ -1,6 +1,6 @@
 """protomol: placeholder graph types for AutoStorage and AutoEngine."""
 
-__version__ = "0.0.2"
+__version__ = "0.0.3"
 
 from . import examples
 from ._canon import canonical_direction, canonical_form, canonical_json
