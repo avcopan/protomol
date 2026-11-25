@@ -3,7 +3,7 @@
 __version__ = "0.0.2"
 
 from . import examples
-from ._canon import canonical_form, canonical_json
+from ._canon import canonical_direction, canonical_form, canonical_json
 from ._ccv import ts_graphs
 from ._compare import deduplicate, isomorphism
 from ._display import display
@@ -65,6 +65,7 @@ __all__ = [
     "StereoReactionGraph",
     "Tetrahedral",
     "TrigonalBipyramidal",
+    "canonical_direction",
     "canonical_form",
     "canonical_json",
     "deduplicate",

@@ -95,6 +95,25 @@ True
 
 ```
 
+### Canonical direction
+
+A reaction graph and its `reverse` are one transition state seen from its two sides, but
+their canonical forms differ. `canonical_direction(gra)` returns whichever of the two has
+the smaller `canonical_json`, and whether it reversed; atom indices are kept:
+
+```python
+>>> ts = pm.examples.abstraction_ts()
+>>> chosen, flipped = pm.canonical_direction(ts)
+>>> again, flipped_again = pm.canonical_direction(pm.reverse(ts))
+>>> chosen == again, flipped != flipped_again
+(True, True)
+>>> pm.canonical_json(chosen) == min(
+...     pm.canonical_json(ts), pm.canonical_json(pm.reverse(ts))
+... )
+True
+
+```
+
 The numbering doesn't see a chain LS (an allene or cumulene axis) yet, so for a graph
 with one the canonical form may depend on the input numbering.
 

@@ -17,6 +17,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   kept. It is idempotent and a no-op on `from_smiles` and `from_geometry` output, but
   for a carbonyl-oxide radical whose perceived Lewis structure is a peroxy radical
   (open question 11).
+- `canonical_direction(gra) -> (graph, reversed)` for a `ReactionGraph` or
+  `StereoReactionGraph`: `gra` or `reverse(gra)`, whichever has the smaller
+  `canonical_json`, and whether it was reversed (a tie keeps `gra`). Atom indices are
+  kept, so an atom map from `canonical_form` of the result applies to the input's atoms.
+  A reaction graph and its reverse give the same result, so one TS imported in either
+  direction gets one identity.
 
 ### Changed
 

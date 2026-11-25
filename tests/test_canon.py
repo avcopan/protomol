@@ -170,3 +170,61 @@ def test_empty_and_single_atom() -> None:
     assert pm.canonical_form(empty) == (empty, ())
     atom = pm.MolGraph(symbols=["He"], bonds=[])
     assert pm.canonical_form(atom) == (atom, (0,))
+
+
+class TestCanonicalDirection:
+    """`canonical_direction` picks the same direction for a TS and its reverse."""
+
+    @pytest.mark.parametrize(
+        "name", ["abstraction_ts", "stereoisomerization_ts", "abstraction_ts_no_stereo"]
+    )
+    def test_reverse_gives_same_result(self, name: str) -> None:
+        """G and reverse(g) give one graph, with opposite flags."""
+        gra = HARD_CASES[name]
+        chosen, flipped = pm.canonical_direction(gra)
+        again, flipped_again = pm.canonical_direction(pm.reverse(gra))
+        assert chosen == again
+        assert flipped != flipped_again
+
+    @pytest.mark.parametrize("name", ["abstraction_ts", "but2ene_rotation_ts"])
+    def test_flag_and_minimum(self, name: str) -> None:
+        """The flag says whether the result is the reverse, and it has the min JSON."""
+        gra = HARD_CASES[name]
+        chosen, flipped = pm.canonical_direction(gra)
+        assert chosen == (pm.reverse(gra) if flipped else gra)
+        both = (pm.canonical_json(gra), pm.canonical_json(pm.reverse(gra)))
+        assert pm.canonical_json(chosen) == min(both)
+
+    def test_relabelled_stable(self) -> None:
+        """100 random relabellings, in either direction, give one canonical value."""
+        rng = random.Random(0)  # noqa: S311
+        gra = HARD_CASES["abstraction_ts"]
+        expected = pm.canonical_json(pm.canonical_direction(gra)[0])
+        for _ in range(100):
+            shuffled = _shuffled(gra, rng)
+            if rng.random() < 0.5:
+                shuffled = pm.reverse(shuffled)
+            assert pm.canonical_json(pm.canonical_direction(shuffled)[0]) == expected
+
+    def test_keeps_atom_indices(self) -> None:
+        """The result has the input's atoms and bonds; only the direction differs."""
+        gra = HARD_CASES["abstraction_ts"]
+        chosen, _ = pm.canonical_direction(gra)
+        assert chosen.symbols == gra.symbols
+        assert chosen.bonds == gra.bonds
+
+    def test_symmetric_self_reaction(self) -> None:
+        """H + H2 → H2 + H is its own reverse: a tie keeps the input, not reversed."""
+        gra = pm.ReactionGraph(
+            symbols=["H", "H", "H"],
+            bonds=[(0, 1), (1, 2)],
+            breaking=[(0, 1)],
+            forming=[(1, 2)],
+            spin=1,
+        )
+        assert pm.canonical_json(gra) == pm.canonical_json(pm.reverse(gra))
+        chosen, flipped = pm.canonical_direction(gra)
+        assert chosen == gra
+        assert not flipped
+        again, _ = pm.canonical_direction(pm.reverse(gra))
+        assert pm.canonical_json(again) == pm.canonical_json(chosen)
