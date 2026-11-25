@@ -66,7 +66,7 @@ class RDMol2StereoMolGraph:
     lone_pair_stereo: bool = True
     resonance: bool = True
     _max_resonance_structures: int = 1000
-    _radical_resonance_as_cation: bool = True
+    _radical_resonance: bool = True
     _min_trans_ring_size: int = 7
 
     def __call__(self, rdmol: Chem.Mol) -> StereoMolGraph:
@@ -80,54 +80,30 @@ class RDMol2StereoMolGraph:
         # Chem.UNCONSTRAINED_CATIONS
         # | )
 
-        has_radicals = any(
+        if self._radical_resonance and any(
             atom.GetNumRadicalElectrons() > 0 for atom in rdmol.GetAtoms()
-        )
-        total_charge = sum(atom.GetFormalCharge() for atom in rdmol.GetAtoms())
-        has_formal_charges = any(
-            atom.GetFormalCharge() != 0 for atom in rdmol.GetAtoms()
-        )
-
-        resonance_input = rdmol
-        radical_resonance_mode = False
-        if (
-            self._radical_resonance_as_cation
-            and has_radicals
-            and total_charge == 0
-            and not has_formal_charges
         ):
-            resonance_input = Chem.RWMol(rdmol, True)
-            radical_resonance_mode = True
-            for atom in resonance_input.GetAtoms():
-                radical_electrons = atom.GetNumRadicalElectrons()
-                if radical_electrons > 0:
-                    atom.SetFormalCharge(atom.GetFormalCharge() + radical_electrons)
-                    atom.SetNumRadicalElectrons(0)
-            Chem.SetConjugation(resonance_input)
-            resonance_input.UpdatePropertyCache(strict=False)
+            structures = radical_resonance_structures(
+                rdmol, self._max_resonance_structures
+            )
+        else:
+            structures = [rdmol]
 
-        for res_mol in Chem.ResonanceMolSupplier(
-            resonance_input,
-            flags,
-            self._max_resonance_structures,
-        ):
+        res_mols = (
+            res_mol
+            for structure in structures
+            for res_mol in (
+                list(
+                    Chem.ResonanceMolSupplier(
+                        structure, flags, self._max_resonance_structures
+                    )
+                )
+                or [structure]
+            )
+        )
+        for res_mol in res_mols:
             if res_mol is None:
                 continue
-
-            if radical_resonance_mode:
-                res_mol = Chem.RWMol(res_mol)
-                discard = False
-                for atom in res_mol.GetAtoms():
-                    charge = atom.GetFormalCharge()
-                    if charge < 0:
-                        discard = True
-                        break
-                    if charge > 0:
-                        atom.SetFormalCharge(0)
-                        atom.SetNumRadicalElectrons(charge)
-                if discard:
-                    continue
-                res_mol.UpdatePropertyCache(strict=False)
 
             res_smg = self.smg_from_rdmol(res_mol)
             for bond, bond_stereo in res_smg.bond_stereo.items():
@@ -545,3 +521,77 @@ class RDMol2StereoMolGraph:
             27: (0, 1, 2, 4, 3, 5),
         }
     )
+
+
+def radical_resonance_structures(
+    rdmol: Chem.Mol, max_structures: int = 1000
+) -> list[Chem.Mol]:
+    """The Kekulé structures reached from `rdmol` by moving its unpaired electrons.
+
+    Two shifts, applied until nothing new comes (at most `max_structures`):
+
+    - allylic, r•-a=b → r=a-b•, also into a triple bond (propargyl → allenyl) and
+      onto a heteroatom (•C-C=O → C=C-O•, vinoxy);
+    - allenyl, r•=a=b → r≡a-b• (allenyl → propargyl), the reverse of the above.
+
+    Only a radical centre whose bonds are all single moves by the allylic shift, so an
+    alkenyl, aryl or acyl σ radical (r•=a) stays where it is. Formal charges stay on
+    their atoms; their own resonance (nitro, carboxylate) is left to RDKit's
+    `ResonanceMolSupplier`, which keeps unpaired electrons where they are.
+    """
+    start = Chem.RWMol(rdmol)
+    Chem.Kekulize(start, clearAromaticFlags=True)
+
+    def key(mol: Chem.Mol) -> tuple:
+        return (
+            tuple(bond.GetBondTypeAsDouble() for bond in mol.GetBonds()),
+            tuple(atom.GetNumRadicalElectrons() for atom in mol.GetAtoms()),
+        )
+
+    def shifted(mol: Chem.Mol, r: int, a: int, b: int, ra: float, ab: float):
+        new = Chem.RWMol(mol)
+        new.GetBondBetweenAtoms(r, a).SetBondType(_BOND_TYPES[ra])
+        new.GetBondBetweenAtoms(a, b).SetBondType(_BOND_TYPES[ab])
+        atom_r, atom_b = new.GetAtomWithIdx(r), new.GetAtomWithIdx(b)
+        atom_r.SetNumRadicalElectrons(atom_r.GetNumRadicalElectrons() - 1)
+        atom_b.SetNumRadicalElectrons(atom_b.GetNumRadicalElectrons() + 1)
+        new.UpdatePropertyCache(strict=False)
+        Chem.SetConjugation(new)
+        Chem.SetHybridization(new)
+        return new
+
+    seen = {key(start): start}
+    queue = [start]
+    while queue and len(seen) < max_structures:
+        mol = queue.pop(0)
+        for atom in mol.GetAtoms():
+            if atom.GetNumRadicalElectrons() == 0:
+                continue
+            r = atom.GetIdx()
+            orders = {
+                bond.GetOtherAtomIdx(r): bond.GetBondTypeAsDouble()
+                for bond in atom.GetBonds()
+            }
+            for a, ra in orders.items():
+                for bond in mol.GetAtomWithIdx(a).GetBonds():
+                    b = bond.GetOtherAtomIdx(a)
+                    ab = bond.GetBondTypeAsDouble()
+                    if b == r:
+                        continue
+                    if ra == 1 and ab >= 2 and set(orders.values()) == {1}:
+                        new = shifted(mol, r, a, b, 2, ab - 1)
+                    elif ra == 2 and ab == 2 and len(orders) <= 2:
+                        new = shifted(mol, r, a, b, 3, 1)
+                    else:
+                        continue
+                    if (k := key(new)) not in seen:
+                        seen[k] = new
+                        queue.append(new)
+    return list(seen.values())
+
+
+_BOND_TYPES = {
+    1: Chem.BondType.SINGLE,
+    2: Chem.BondType.DOUBLE,
+    3: Chem.BondType.TRIPLE,
+}

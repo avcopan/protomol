@@ -13,6 +13,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   (amines, phosphines, sulfoxides, sulfonium ions), but not an N next to a π system or
   a radical centre (amides, anilines, enamines, nitroxides, α-amino radicals). Phosphines
   and sulfoxides used to get one only from a chiral tag.
+- Radicals with formal charges, and vinoxy radicals from their carbonyl form, get an LS
+  on each resonating double bond (stereomolgraph's radical resonance, fixed on the fork's
+  `protomol` branch).
 
 ## [0.0.2] - 2026-11-24
 

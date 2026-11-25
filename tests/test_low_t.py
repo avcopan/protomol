@@ -139,13 +139,13 @@ CASES = [
     # Resonating double bonds in charged radicals
     Case(
         "CC=C[CH][N+](=O)[O-]",
-        "C1=C2? C2=C3?",
+        "C1=C2? C2=C3? C3=N4:0",
         "C1=C2?",
         "an allylic radical with a nitro group (stereomolgraph's radical resonance)",
     ),
     Case(
         "C[CH]C=CC=[O+][O-]",
-        "C1=C2? C2=C3? C4=O5?",
+        "C1=C2? C2=C3? C3=C4? C4=O5?",
         "C2=C3? C4=O5?",
         "an allylic radical with a carbonyl oxide",
     ),
@@ -155,7 +155,6 @@ CASES = [
 _TRIVIAL = "trivial sites are tested against the other sites' configurations"
 _N_TAG = "a chiral tag on N is kept"
 _ALKENYL = "alkenyl radical bonds get no LS"
-_RESONANCE = "stereomolgraph's radical resonance (back end)"
 PENDING: dict[str, str] = {
     "CC1CCC(C)CC1": _TRIVIAL,
     "OC(=O)C(O)C(O)C(O)C(=O)O": _TRIVIAL,
@@ -163,14 +162,13 @@ PENDING: dict[str, str] = {
     "C[N@@](F)Cl": _N_TAG,
     "C[C]=CC": _ALKENYL,
     "[CH]=CC": _ALKENYL,
-    "CC=C[CH][N+](=O)[O-]": _RESONANCE,
-    "C[CH]C=CC=[O+][O-]": _RESONANCE,
 }
-# The round trip fails where `from_geometry`'s Lewis structure is another resonance
-# structure than the SMILES's
-PENDING_GEOMETRY = dict.fromkeys(
-    ("CC=C[O]", "CC=C[CH][N+](=O)[O-]", "C[CH]C=CC=[O+][O-]"), _RESONANCE
-)
+# The round trip fails where `from_geometry`'s Lewis structure is another species than
+# the SMILES's: the geometry of this carbonyl oxide reads as a dienyl peroxy radical
+# (C=CC=CO[O]), which has no C2=C3 or C4=O5 bond
+PENDING_GEOMETRY = {
+    "C[CH]C=CC=[O+][O-]": "from_geometry reads it as a dienyl peroxy radical",
+}
 
 
 def _sites(g: pm.StereoMolGraph) -> str:
