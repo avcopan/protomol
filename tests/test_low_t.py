@@ -47,6 +47,8 @@ CASES = [
         "1,4-dimethylcyclohexane: cis/trans, though each centre alone looks trivial",
     ),
     Case("C[C@H]1CC[C@@H](C)CC1", "C1:1 C4:1", "C1:1 C4:1", "given cis or trans"),
+    Case("CCC(O)CC", "C2:1", "C2:1", "two equal ethyls: trivial"),
+    Case("CC(C)(C)C(C)O", "C1:1 C4?", "C1:1 C4?", "a tert-butyl group: trivial"),
     Case(
         "OC(=O)C(O)C(O)C(O)C(=O)O",
         "C3? C5? C7?",
@@ -160,12 +162,8 @@ CASES = [
     ),
 ]
 
-# The cases each later rule fixes, until it lands
-_TRIVIAL = "trivial sites are tested against the other sites' configurations"
-PENDING: dict[str, str] = {
-    "CC1CCC(C)CC1": _TRIVIAL,
-    "OC(=O)C(O)C(O)C(O)C(=O)O": _TRIVIAL,
-}
+# The cases each rule fixed were marked here (xfail) until it landed
+PENDING: dict[str, str] = {}
 # The round trip fails where `from_geometry`'s Lewis structure is another species than
 # the SMILES's: the geometry of this carbonyl oxide reads as a dienyl peroxy radical
 # (C=CC=CO[O]), which has no C2=C3 or C4=O5 bond

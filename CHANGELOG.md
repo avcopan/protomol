@@ -19,6 +19,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `from_smiles` keeps a chiral tag on a pyramidal N (`C[N@](F)Cl`), which RDKit drops.
 - An acyclic double bond or cumulated chain with a radical end (an alkenyl or allenyl
   radical) gets no LS: the low-T scheme lumps its cis and trans forms.
+- A site is filled as trivial only if it is trivial for every configuration of the other
+  undetermined sites: the centres of 1,4-dimethylcyclohexane (cis/trans) and the
+  pseudoasymmetric C of 2,3,4-trihydroxyglutaric acid stay undetermined.
 
 ## [0.0.2] - 2026-11-24
 

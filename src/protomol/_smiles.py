@@ -5,13 +5,21 @@ protomol then puts one chain LS on each cumulated chain (P15), applies the low-T
 """
 
 import itertools
+import math
 
 import networkx as nx
 from pydantic import ValidationError
 from rdkit import Chem
 
 from ._backend import from_smg, to_smg
-from ._stereo import AtropBond, PlanarBond, Tetrahedral, isomers
+from ._stereo import (
+    AtomStereo,
+    AtropBond,
+    BondStereo,
+    PlanarBond,
+    Tetrahedral,
+    isomers,
+)
 from ._types import (
     GraphError,
     StereoMolGraph,
@@ -29,6 +37,7 @@ _RDMOL_TO_SMG = RDMol2StereoMolGraph(
 _PYRAMIDAL_SYMBOLS = frozenset({"N", "P", "S"})
 _PYRAMIDAL_NEIGHBORS = 3
 _CHAIN_END_SUBSTITUENTS = 2
+_MAX_CONFIGURATIONS = 2**8
 
 
 def from_smiles(
@@ -347,8 +356,15 @@ def _with_pyramidal_lss(mol: Chem.Mol, gra: StereoMolGraph) -> StereoMolGraph:
 def _fill_trivial_sites(gra: StereoMolGraph) -> StereoMolGraph:
     """Give each trivial site the parity of its first isomer.
 
-    A site is trivial when all its configurations give the same graph (stereomolgraph's
-    stereo-aware isomorphism), each tested on `gra` with the other sites as they are.
+    A site is trivial when its configurations give the same graph (stereomolgraph's
+    stereo-aware isomorphism) for every configuration of the other undetermined sites:
+    C1 of 1,4-dimethylcyclohexane looks trivial while C4 is undetermined, but cis and
+    trans differ. Sites with twin terminal groups (CH3, CH2, C(CH3)2, =CH2) are trivial
+    whatever the rest, and are filled first, so they aren't enumerated. The others are
+    tested one at a time, each against every configuration of the remaining
+    undetermined sites, and filled as they are found trivial. Past `_MAX_CONFIGURATIONS`
+    configurations a site is tested with the other sites left undetermined instead.
+
     stereomolgraph can't hold a chain LS, so the chain LS are left out of the test and
     are never filled here (`_with_chain_stereo` fills the trivial ones).
     """
@@ -356,12 +372,67 @@ def _fill_trivial_sites(gra: StereoMolGraph) -> StereoMolGraph:
     for ls in gra.bond_stereo:
         if ls.chain:
             chain_free = remove_stereo(chain_free, ls.atoms[2:4])
-    trivial = []
-    for ls in (*chain_free.atom_stereo, *chain_free.bond_stereo):
-        if ls.parity is not None:
-            continue
-        isos = isomers(ls)
-        smg0, *smgs = (to_smg(with_stereo(chain_free, iso)) for iso in isos)
-        if all(smg == smg0 for smg in smgs):
-            trivial.append(isos[0])
+    twins = [
+        isomers(ls)[0]
+        for ls in _undetermined(chain_free)
+        if _has_twin_terminal_groups(chain_free, ls)
+    ]
+    chain_free = with_stereo(chain_free, *twins)
+    trivial = list(twins)
+    for ls in _undetermined(chain_free):
+        if _is_trivial(chain_free, ls):
+            iso = isomers(ls)[0]
+            chain_free = with_stereo(chain_free, iso)
+            trivial.append(iso)
     return with_stereo(gra, *trivial)
+
+
+def _undetermined(gra: StereoMolGraph) -> list[AtomStereo | BondStereo]:
+    """The undetermined LS of `gra`."""
+    return [ls for ls in (*gra.atom_stereo, *gra.bond_stereo) if ls.parity is None]
+
+
+def _is_terminal_group(gra: StereoMolGraph, i: int, centre: int) -> bool:
+    """Whether atom `i` on `centre` is an end atom or has only H: CH3, NH2, OH, =CH2."""
+    return all(gra.symbols[j] == "H" for j in neighbors(gra, i) if j != centre)
+
+
+def _has_twin_terminal_groups(gra: StereoMolGraph, ls: AtomStereo | BondStereo) -> bool:
+    """Whether a centre of `ls` has two equal terminal groups (same atom, same H count).
+
+    Swapping the two groups maps the graph onto itself whatever the other sites, so
+    the site is trivial.
+    """
+    if isinstance(ls, PlanarBond | AtropBond):
+        a, b, end1, end2, c, d = ls.atoms
+        groups = [(end1, (a, b)), (end2, (c, d))]
+    else:
+        groups = [(ls.atoms[0], ls.atoms[1:])]
+    for centre, subs in groups:
+        keys = [
+            (gra.symbols[i], len(neighbors(gra, i)))
+            for i in subs
+            if i is not None and _is_terminal_group(gra, i, centre)
+        ]
+        if len(keys) != len(set(keys)):
+            return True
+    return False
+
+
+def _is_trivial(gra: StereoMolGraph, ls: AtomStereo | BondStereo) -> bool:
+    """Whether every configuration of `ls` gives the same graph, whatever the others.
+
+    "The others" are the other undetermined sites of `gra`, each in each of its
+    configurations, up to `_MAX_CONFIGURATIONS` in all; past that, they are left
+    undetermined.
+    """
+    others = [isomers(other) for other in _undetermined(gra) if other != ls]
+    if math.prod(len(isos) for isos in others) > _MAX_CONFIGURATIONS:
+        others = []
+    isos = isomers(ls)
+    for config in itertools.product(*others):
+        base = with_stereo(gra, *config)
+        smg0, *smgs = (to_smg(with_stereo(base, iso)) for iso in isos)
+        if any(smg != smg0 for smg in smgs):
+            return False
+    return True
