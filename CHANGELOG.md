@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- `low_t(g)` for `MolGraph | StereoMolGraph` (giving a `StereoMolGraph`) and
+  `ReactionGraph | StereoReactionGraph` (giving a `StereoReactionGraph`): the low-T
+  scheme's sites, perceived on a Lewis structure of the graph. A site the graph has
+  keeps its LS and parity, a site the scheme drops loses its LS, and an added site is
+  undetermined, or fixed if trivial. A reaction graph's sides are reassigned
+  separately; each `StereoChange` slot follows its side's site, and the TS slots are
+  kept. It is idempotent and a no-op on `from_smiles` and `from_geometry` output, but
+  for a carbonyl-oxide radical whose perceived Lewis structure is a peroxy radical
+  (open question 11).
+
 ### Changed
 
 - `from_smiles` and `from_geometry` put a lone-pair `Tetrahedral` on exactly the

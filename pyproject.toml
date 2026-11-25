@@ -80,7 +80,7 @@ root_package = "protomol"
 name = "Module Layering"
 type = "layers"
 layers = [
-    "protomol._geometry",
+    "protomol._geometry | protomol._low_t",
     "protomol._smiles | protomol._display | protomol._canon | protomol._compare",
     "protomol._backend | protomol._json | protomol._lewis",
     "protomol._types",

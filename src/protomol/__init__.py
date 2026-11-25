@@ -9,6 +9,7 @@ from ._compare import deduplicate, isomorphism
 from ._display import display
 from ._geometry import embed, from_geometry
 from ._json import from_json, to_json
+from ._low_t import low_t
 from ._reaction import (
     products,
     reactants,
@@ -77,6 +78,7 @@ __all__ = [
     "is_determined",
     "isomers",
     "isomorphism",
+    "low_t",
     "neighbors",
     "products",
     "reactants",

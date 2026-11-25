@@ -22,6 +22,7 @@ from dataclasses import dataclass
 import pytest
 
 import protomol as pm
+from protomol._geometry import _with_parities_from_geometry
 from protomol._types import neighbors
 
 
@@ -303,3 +304,91 @@ def test_from_geometry_sites(case: Case) -> None:
     filled = pm.with_stereo(gra, *(ls for ls in found if ls is not None))
     assert _labels(back) == _labels(gra), case.why
     assert back == filled, case.why
+
+
+# `low_t` re-perceives the sites on `_lewis`'s Lewis structure, so a rule that reads the
+# Lewis structure can differ from the SMILES's reading (open question 11)
+PENDING_LOW_T = {
+    "C[CH]C=CC=[O+][O-]": "_lewis reads it as a dienyl peroxy radical, C=CC=CO[O]",
+}
+
+
+@pytest.mark.parametrize("case", _params(CASES, PENDING_LOW_T))
+def test_low_t_from_smiles(case: Case) -> None:
+    """`low_t` leaves `from_smiles`'s graph as it is."""
+    gra = pm.from_smiles(case.smiles)
+    assert pm.low_t(gra) == gra, case.why
+
+
+@pytest.mark.parametrize("case", _params(CASES, {}))
+def test_low_t_from_geometry(case: Case) -> None:
+    """`low_t` leaves `from_geometry`'s graph as it is."""
+    back = pm.from_geometry(pm.embed(pm.from_smiles(case.smiles)))
+    assert pm.low_t(back) == back, case.why
+
+
+@pytest.mark.parametrize("case", _params(CASES, PENDING_LOW_T))
+def test_low_t_plain(case: Case) -> None:
+    """A plain graph gets the case's sites, fixed only where trivial; idempotent."""
+    gra = pm.from_smiles(case.smiles)
+    low = pm.low_t(pm.without_stereo(gra))
+    assert _labels(low) == _labels(gra), case.why
+    determined = [ls for ls in (*low.atom_stereo, *low.bond_stereo) if ls.parity]
+    assert all(pm.stereo_at(gra, pm.site(ls)) == ls for ls in determined), case.why
+    assert pm.low_t(low) == low
+
+
+def test_low_t_drops_and_adds() -> None:
+    """A dropped site loses its LS; an added one is undetermined; parities are kept."""
+    gra = pm.from_smiles("C[C@H](O)C[C]=CC")  # an alkenyl radical: no bond LS
+    (a,), (c, d) = (
+        [i for i in pm.neighbors(gra, end) if i != other]
+        for end, other in ((4, 5), (5, 4))
+    )
+    bond = pm.PlanarBond(atoms=(a, None, 4, 5, c, d), parity=0)
+    given = pm.with_stereo(pm.remove_stereo(gra, 1), bond)
+    low = pm.low_t(given)
+    assert pm.stereo_at(low, (4, 5)) is None
+    centre = pm.stereo_at(gra, 1)
+    assert isinstance(centre, pm.Tetrahedral)
+    assert pm.stereo_at(low, 1) == pm.Tetrahedral(atoms=centre.atoms)
+    assert pm.low_t(gra) == gra
+
+
+def test_low_t_reaction() -> None:
+    """Each side is reassigned; the TS slots are kept."""
+    for ts in (pm.examples.abstraction_ts(), pm.examples.stereoisomerization_ts()):
+        assert pm.low_t(ts) == ts
+    ts = pm.examples.stereoisomerization_ts()
+    plain = pm.low_t(pm.without_stereo(ts))
+    assert plain.stereo_changes == ()
+    bond = pm.stereo_at(plain, (1, 2))
+    assert isinstance(bond, pm.PlanarBond)
+    assert bond.parity is None
+    assert pm.reactants(plain) == pm.low_t(pm.reactants(pm.without_stereo(ts)))
+    assert pm.low_t(plain) == plain
+
+
+def test_low_t_reaction_drops_a_slot() -> None:
+    """A change slot whose site the scheme drops goes; the change goes with both."""
+    rct = pm.from_smiles("C[C]=CC")  # an alkenyl radical: no bond LS
+    (a,), (c, d) = (
+        [i for i in pm.neighbors(rct, end) if i != other]
+        for end, other in ((1, 2), (2, 1))
+    )
+    bond = pm.PlanarBond(atoms=(a, None, 1, 2, c, d), parity=0)
+    rxn = pm.reaction_graph(pm.with_stereo(rct, bond), rct)
+    assert len(rxn.stereo_changes) == 1
+    assert pm.low_t(rxn).stereo_changes == ()
+    assert pm.low_t(rxn) == pm.low_t(pm.without_stereo(rxn))
+
+
+# canonical_json ignores a chain LS (P45), with a warning
+@pytest.mark.filterwarnings("ignore:stereomolgraph can't hold a chain LS")
+@pytest.mark.parametrize("case", _params(CASES, {}))
+def test_parities_from_geometry(case: Case) -> None:
+    """A plain graph's `low_t` sites, filled from a geometry, give `from_geometry`'s."""
+    geo = pm.embed(pm.from_smiles(case.smiles))
+    back = pm.from_geometry(geo)
+    filled = _with_parities_from_geometry(pm.low_t(pm.without_stereo(back)), geo)
+    assert pm.canonical_json(filled) == pm.canonical_json(back), case.why

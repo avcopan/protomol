@@ -202,6 +202,28 @@ def _spread_fragments(mol: Chem.Mol, xyz: _Coords) -> _Coords:
     return coords
 
 
+def _with_parities_from_geometry(gra: StereoMolGraph, geo: Geometry) -> StereoMolGraph:
+    """`gra` with each undetermined LS's parity read from `geo`, atom i on atom i.
+
+    How a scheme's added sites get their parities (P57): `smg_low_t@1` applies it to
+    `low_t(gra)` (P53). It uses `from_geometry`'s readers, and a site whose coordinates
+    don't decide it stays undetermined.
+
+    Raises:
+        GraphError: If the geometry's symbols differ from the graph's.
+    """
+    if tuple(geo.symbols) != gra.symbols:
+        msg = f"The geometry's atoms {geo.symbols} differ from the graph's"
+        raise GraphError(msg)
+    xyz = np.asarray(geo.coordinates, dtype=np.float64)
+    lss = [
+        _ls_from_coords(ls, xyz)
+        for ls in (*gra.atom_stereo, *gra.bond_stereo)
+        if ls.parity is None
+    ]
+    return with_stereo(gra, *lss)
+
+
 def _with_parities_from(gra: StereoMolGraph, xyz: _Coords) -> StereoMolGraph:
     """`gra` with each LS's parity read from the coordinates (undetermined if unclear).
 
