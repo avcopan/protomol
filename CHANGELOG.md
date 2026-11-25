@@ -35,6 +35,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `from_smiles` keeps a chiral tag on such a centre (`C[C@H]1O[C@]1C`).
 - An alkenyl or allenyl radical whose radical C bears an N, O, F or Cl keeps its bond or
   chain LS (`F[C]=CC`), with the unpaired electron in a `None` slot.
+- A single bond with a closed-shell partial double bond gets a `PlanarBond`: an N with
+  three neighbours (not in a three-membered ring) on a C=O, C=S or N=O (amides,
+  thioamides, carbamates, ureas, imides, hydroxamic acids, nitrosamines), and the C-C of
+  a vinyl carbonyl oxide (acrolein oxide's s-cis/s-trans). A ring of fewer than seven
+  atoms holds it cis (lactams). Esters, amidines, enamines and enones get none.
 
 ## [0.0.2] - 2026-11-24
 

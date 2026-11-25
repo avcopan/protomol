@@ -1,7 +1,8 @@
 """`from_smiles`: RDKit parses, stereomolgraph perceives the LS (P7, P16).
 
 protomol then puts one chain LS on each cumulated chain (P15), applies the low-T rules
-(the pyramidal atoms), fills in the trivial sites, and checks charge and spin.
+(P54: alkenyl radicals, pyramidal atoms and radicals, partial double bonds), fills in
+the trivial sites, and checks charge and spin.
 """
 
 import itertools
@@ -39,6 +40,17 @@ _PYRAMIDAL_NEIGHBORS = 3
 _RADICAL_HETEROATOMS = frozenset({"N", "O", "F", "Cl"})  # keep a sigma radical rigid
 _CHAIN_END_SUBSTITUENTS = 2
 _MAX_CONFIGURATIONS = 2**8
+_MIN_TRANS_RING_SIZE = 7  # stereomolgraph's: a smaller ring holds a planar bond cis
+# Single bonds with a partial double bond (P54, R6), as (end1, end2): an N with three
+# neighbours, not in a 3-ring, on a C=O, C=S or N=O (amides, thioamides, carbamates,
+# ureas, imides, hydroxamic acids, nitrosamines); the C-C of a vinyl carbonyl oxide
+_PARTIAL_DOUBLE_BONDS = tuple(
+    Chem.MolFromSmarts(smarts)
+    for smarts in (
+        "[NX3;+0;!a;!r3]-[$([#6]=[O,S]),$([#7;+0]=[OX1])]",
+        "[#6;$([#6]=[#6])]-[#6;$([#6]=[O+]-[O-])]",
+    )
+)
 _TETRAHEDRAL_TAGS = {
     Chem.ChiralType.CHI_TETRAHEDRAL_CW: Chem.ChiralType.CHI_TETRAHEDRAL_CCW,
     Chem.ChiralType.CHI_TETRAHEDRAL_CCW: Chem.ChiralType.CHI_TETRAHEDRAL_CW,
@@ -153,8 +165,8 @@ def _from_rdkit_mol(mol: Chem.Mol, *, charge: int, spin: int) -> StereoMolGraph:
 
     The low-T scheme `from_smiles` documents: stereomolgraph perceives the LS from the
     Lewis structure, its resonance structures and the chiral tags, then the chain LS,
-    the linear-end rule, the alkenyl radicals, the pyramidal atoms and the trivial
-    sites. `from_geometry` shares it.
+    the linear-end rule, the alkenyl radicals, the pyramidal atoms and radicals, the
+    partial double bonds and the trivial sites. `from_geometry` shares it.
     """
     try:
         gra = from_smg(_RDMOL_TO_SMG(mol), charge=charge, spin=spin)
@@ -165,6 +177,7 @@ def _from_rdkit_mol(mol: Chem.Mol, *, charge: int, spin: int) -> StereoMolGraph:
         gra = _without_linear_bond_stereo(gra, linear)
         gra = _without_alkenyl_radical_bond_stereo(mol, gra)
         gra = _with_pyramidal_lss(mol, gra)
+        gra = _with_partial_double_bond_lss(mol, gra)
         return _fill_trivial_sites(gra)
     except ValidationError as err:
         raise GraphError(str(err)) from err
@@ -427,6 +440,57 @@ def _with_pyramidal_lss(mol: Chem.Mol, gra: StereoMolGraph) -> StereoMolGraph:
             for i in sorted(pyramidal - has_ls)
         ),
     )
+
+
+def _with_partial_double_bond_lss(mol: Chem.Mol, gra: StereoMolGraph) -> StereoMolGraph:
+    """`gra` with a `PlanarBond` on each closed-shell partial double bond.
+
+    Undetermined, except in a ring of fewer than 7 atoms, which holds it cis (lactams).
+
+    The single bonds of `_PARTIAL_DOUBLE_BONDS` (P54, R6): an amide-like C-N or N-N
+    (10-23 kcal/mol) and a vinyl carbonyl oxide's C-C (9-12), which rotate as slowly as
+    a radical's resonating bond. Not neutral pi-pi conjugation (dienes, enones), N
+    donors without one of those acceptors (enamines, anilines), O and S donors (esters,
+    thioesters), amidines, or an N-acyl aziridine (its N is pyramidal: C-N ≈ 3). A
+    bond that already has an LS keeps it. An end with one substituent (the O of a
+    nitroso group) has a `None` slot.
+    """
+    sites = {
+        frozenset(match): match
+        for pattern in _PARTIAL_DOUBLE_BONDS
+        for match in mol.GetSubstructMatches(pattern)
+        if stereo_at(gra, match) is None
+    }
+    lss = []
+    for end1, end2 in sites.values():
+        ring = _small_ring(mol, end1, end2)
+        subs = [
+            # the ring neighbour first, if any
+            sorted(
+                (i for i in neighbors(gra, end) if i != other),
+                key=lambda i: i not in ring,
+            )
+            for end, other in ((end1, end2), (end2, end1))
+        ]
+        (a, b), (c, d) = ((*sub, None)[:2] for sub in subs)
+        lss.append(
+            PlanarBond(atoms=(a, b, end1, end2, c, d), parity=0 if ring else None)
+        )
+    return with_stereo(gra, *lss)
+
+
+def _small_ring(mol: Chem.Mol, end1: int, end2: int) -> set[int]:
+    """The atoms of the smallest ring through bond end1-end2, if it has < 7 atoms.
+
+    Such a ring holds a planar bond cis (a lactam's C-N), as stereomolgraph does for a
+    ring double bond (`_MIN_TRANS_RING_SIZE`). Empty if there is none.
+    """
+    rings = [
+        ring
+        for ring in mol.GetRingInfo().AtomRings()
+        if end1 in ring and end2 in ring and len(ring) < _MIN_TRANS_RING_SIZE
+    ]
+    return set(min(rings, key=len)) if rings else set()
 
 
 def _fill_trivial_sites(gra: StereoMolGraph) -> StereoMolGraph:

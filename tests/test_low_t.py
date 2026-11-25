@@ -86,13 +86,13 @@ CASES = [
         "N0lp?",
         "atom-first: the lone pair goes where an implicit H would (C[N@@](F)Cl)",
     ),
-    Case("CC(=O)[N@](C)CC", "", "", "a tag on an amide N is dropped"),
+    Case("CC(=O)[N@](C)CC", "C1=N3?", "", "a tag on an amide N is dropped"),
     Case("CC1CN1C", "C1? N3lp?", "C1? N3lp?", "an aziridine N"),
     Case("CN(O)CC", "N1lp?", "N1lp?", "a hydroxylamine N"),
     Case("CN(N)CC", "N1lp?", "N1lp?", "a hydrazine N"),
-    Case("CC(=O)N(C)CC", "", "", "an amide N is conjugated: planar"),
+    Case("CC(=O)N(C)CC", "C1=N3?", "", "an amide N is planar; its C-N is an LS (R6)"),
     Case("CN(CC)C=C", "C4=C5:0", "C4=C5:0", "an enamine N is conjugated"),
-    Case("CN(CC)N=O", "", "", "a nitrosamine N is conjugated"),
+    Case("CN(CC)N=O", "N1=N4?", "", "a nitrosamine N is planar; its N-N is an LS"),
     Case(
         "CN(CC)[O]",
         "",
@@ -134,7 +134,12 @@ CASES = [
         "CC(=O)N1CC1", "N3lp:1", "", "an N-acyl aziridine with two equal CH2: trivial"
     ),
     Case("C=CN1CC1C", "C0=C1:0 N2lp? C4?", "C0=C1:0 C4?", "an N-vinyl aziridine"),
-    Case("CC(=O)N1CCC1", "", "", "an N-acyl azetidine N is conjugated: planar"),
+    Case(
+        "CC(=O)N1CCC1",
+        "C1=N3:0",
+        "",
+        "an N-acyl azetidine N is planar; its C-N is trivial (two ring CH2)",
+    ),
     # Pyramidal radical centres (P54, R4): the unpaired electron takes the None slot
     Case(
         "CC1O[C]1C",
@@ -189,11 +194,32 @@ CASES = [
     Case("CC=[O+][O-]", "C1=O2?", "C1=O2?", "a Criegee intermediate: syn or anti"),
     Case(
         "C=CC=[O+][O-]",
+        "C0=C1:0 C1=C2? C2=O3?",
         "C0=C1:0 C2=O3?",
-        "C0=C1:0 C2=O3?",
-        "acrolein oxide: the C=O+ bond (C1-C2, s-cis/s-trans, rotates)",
+        "acrolein oxide: syn/anti C=O+, and s-cis/s-trans C1-C2 (9-12 kcal/mol, R6)",
     ),
     Case("CC=[N+]([O-])C", "C1=N2?", "C1=N2?", "a nitrone"),
+    # Closed-shell partial double bonds (P54, R6)
+    Case("CC(=O)NC", "C1=N3?", "", "a secondary amide: cis/trans"),
+    Case("CC(=S)N(C)CC", "C1=N3?", "", "a thioamide"),
+    Case("COC(=O)N(C)CC", "C2=N4?", "", "a carbamate"),
+    Case("CN(C)C(=O)N(C)CC", "N1=C3:0 C3=N5?", "", "a urea: one trivial C-N"),
+    Case("CC(=O)N(C)C(C)=O", "C1=N3? N3=C5?", "", "an imide"),
+    Case("CC(=O)N(O)CC", "C1=N3?", "", "a hydroxamic acid"),
+    Case("CN(C)C=O", "N1=C3:0", "", "DMF: two equal methyls, trivial"),
+    Case("CC(N)=O", "C1=N2:0", "", "acetamide: NH2, trivial"),
+    Case("CN(C)N=O", "N1=N3:0", "", "N-nitrosodimethylamine: trivial"),
+    Case("O=C1CCCN1C", "C1=N5:0", "", "a lactam: a 5-ring holds it cis"),
+    Case("O=C1CCCCCN1C", "C1=N7?", "", "a 7-ring lactam: not held, as for C=C"),
+    Case(
+        "CC=CC=[O+][O-]",
+        "C1=C2? C2=C3? C3=O4?",
+        "C1=C2? C3=O4?",
+        "crotonaldehyde oxide",
+    ),
+    Case("CC(=O)OC", "", "", "an ester: O donors are left out"),
+    Case("CC(=N)N(C)CC", "C1=N2?", "C1=N2?", "an amidine C-N is left out"),
+    Case("C=CC=O", "C0=C1:0", "C0=C1:0", "acrolein: neutral pi-pi conjugation rotates"),
     # Resonating double bonds in charged radicals
     Case(
         "CC=C[CH][N+](=O)[O-]",
