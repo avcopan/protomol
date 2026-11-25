@@ -95,6 +95,9 @@ def canonical_direction(
     atom map from `canonical_form` of the result applies to the input's atoms as
     they are. `canonical_form` itself stays faithful to its input.
 
+    The canonical TS, the same for a TS, its reverse and their mirror images (P60),
+    is `canonical_direction(canonical_enantiomer(gra))`.
+
     >>> from protomol import examples
     >>> ts = examples.abstraction_ts()
     >>> chosen, flipped = canonical_direction(ts)

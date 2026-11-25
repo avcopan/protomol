@@ -15,6 +15,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   JSON of the two. `canonical_enantiomer` returns whichever has the smaller canonical
   JSON (a tie keeps `g`); on a reaction graph each is compared in its canonical
   direction, so the choice doesn't depend on the direction.
+- The canonical TS, documented in `user_guide/02-identity.qmd` and tested:
+  `canonical_direction(canonical_enantiomer(ts))` is the same for a TS, its reverse,
+  its mirror image and the mirror image reversed (P60). No new function.
 
 ### Changed
 

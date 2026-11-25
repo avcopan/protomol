@@ -1,4 +1,4 @@
-"""Tests for enantiomer, is_chiral and canonical_enantiomer (P50, P60)."""
+"""Tests for the mirror-image functions and the canonical TS (P50, P60)."""
 
 import random
 from typing import Any
@@ -156,3 +156,53 @@ def test_canonical_enantiomer_ignores_direction(gra: Graph) -> None:
     """A reaction graph and its reverse pick the same mirror image (P60)."""
     chosen = pm.canonical_enantiomer(gra)
     assert pm.canonical_enantiomer(pm.reverse(gra)) == pm.reverse(chosen)
+
+
+# The canonical TS (P58, P60): canonical_direction(canonical_enantiomer(g))
+
+
+def _canonical_ts(gra: Graph) -> str:
+    return pm.canonical_json(pm.canonical_direction(pm.canonical_enantiomer(gra))[0])
+
+
+@pytest.mark.parametrize(
+    "gra",
+    [
+        CHIRAL_TS,
+        pm.examples.stereoisomerization_ts(),
+        _but2ene_rotation_ts(1),
+        pm.examples.abstraction_ts(),
+    ],
+)
+def test_canonical_ts_is_shared_by_all_four_versions(gra: Graph) -> None:
+    """A TS, its reverse, its mirror image and the mirror reversed give one result."""
+    versions = (
+        gra,
+        pm.reverse(gra),
+        pm.enantiomer(gra),
+        pm.reverse(pm.enantiomer(gra)),
+    )
+    expected = _canonical_ts(gra)
+    rng = random.Random(0)  # noqa: S311
+    for version in versions:
+        assert _canonical_ts(version) == expected
+        assert _canonical_ts(_shuffled(version, rng)) == expected
+
+
+def test_canonical_ts_versions_are_distinct() -> None:
+    """The four versions of the chiral TS are four different directed graphs."""
+    gra = CHIRAL_TS
+    versions = (
+        gra,
+        pm.reverse(gra),
+        pm.enantiomer(gra),
+        pm.reverse(pm.enantiomer(gra)),
+    )
+    assert len({pm.canonical_json(v) for v in versions}) == 4
+
+
+def test_canonical_ts_keeps_atom_indices() -> None:
+    """The canonical TS is the input with parities and direction changed, not atoms."""
+    chosen, _ = pm.canonical_direction(pm.canonical_enantiomer(CHIRAL_TS))
+    assert chosen.symbols == CHIRAL_TS.symbols
+    assert chosen.bonds == CHIRAL_TS.bonds

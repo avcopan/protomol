@@ -141,6 +141,26 @@ On a reaction graph the choice doesn't depend on the direction: each mirror imag
 compared in its canonical direction, and the winner is returned in the input's
 direction.
 
+### The canonical TS
+
+A TS has four versions: the graph, its reverse, its mirror image, and the mirror image
+reversed. All four are one saddle point up to reflection, so they get one canonical TS:
+`canonical_direction(canonical_enantiomer(ts))`, the mirror image chosen first, then the
+direction. Atom indices are kept, so an atom map from `canonical_form` of the result
+applies to the TS geometry as it is (reflected, if `canonical_enantiomer` picked the
+mirror image):
+
+```python
+>>> ts = pm.examples.stereoisomerization_ts()
+>>> def canonical_ts(ts):
+...     chosen, _ = pm.canonical_direction(pm.canonical_enantiomer(ts))
+...     return pm.canonical_json(chosen)
+>>> versions = [ts, pm.reverse(ts), pm.enantiomer(ts), pm.reverse(pm.enantiomer(ts))]
+>>> len({canonical_ts(v) for v in versions})
+1
+
+```
+
 The numbering doesn't see a chain LS (an allene or cumulene axis) yet, so for a graph
 with one the canonical form may depend on the input numbering.
 
