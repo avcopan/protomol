@@ -23,6 +23,7 @@ from ._stereo import (
     isomers,
 )
 from ._types import (
+    AnyGraph,
     GraphError,
     StereoMolGraph,
     StereoReactionGraph,
@@ -625,12 +626,12 @@ def _undetermined(gra: StereoMolGraph) -> list[AtomStereo | BondStereo]:
     return [ls for ls in (*gra.atom_stereo, *gra.bond_stereo) if ls.parity is None]
 
 
-def _is_terminal_group(gra: StereoMolGraph, i: int, centre: int) -> bool:
+def _is_terminal_group(gra: AnyGraph, i: int, centre: int) -> bool:
     """Whether atom `i` on `centre` is an end atom or has only H: CH3, NH2, OH, =CH2."""
     return all(gra.symbols[j] == "H" for j in neighbors(gra, i) if j != centre)
 
 
-def _has_twin_terminal_groups(gra: StereoMolGraph, ls: AtomStereo | BondStereo) -> bool:
+def _has_twin_terminal_groups(gra: AnyGraph, ls: AtomStereo | BondStereo) -> bool:
     """Whether a centre of `ls` has two equal terminal groups (same atom, same H count).
 
     Swapping the two groups maps the graph onto itself whatever the other sites, so

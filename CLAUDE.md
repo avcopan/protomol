@@ -11,7 +11,7 @@ something to settle in code. Private helpers (`_name`) are fine.
   `extern/stereomolgraph` by `pixi run vendor` (checked in pre-commit; never edit the copy).
   Its types never leave `_backend.py` (`to_smg`, `from_smg`): no public function takes or
   returns one. The other private modules may import its algorithms (`_smiles` its RDKit
-  reader, `_display` its `View2D`), and the import-linter layers in `pyproject.toml` hold
+  reader, `_geometry` its `handedness`), and the import-linter layers in `pyproject.toml` hold
   the order.
 - **Index alignment.** Atom i of a graph is atom i of the geometry or SMILES it came from:
   `from_smiles` keeps the SMILES atoms in order, `[H]` atoms where they are written, then
