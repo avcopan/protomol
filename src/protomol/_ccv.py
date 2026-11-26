@@ -323,18 +323,47 @@ class _CCV:
             _count_vector_bond_combinations(pcv, self.product_bond_symbols),
         )
 
+    @functools.cached_property
+    def _broken_cache(self) -> dict[tuple[bool, tuple[_Pair, ...]], "_Broken"]:
+        return {}
+
+    def _broken(
+        self, gra: MolGraph | StereoMolGraph, bonds: Sequence[_Pair]
+    ) -> "_Broken":
+        """`gra` (the reactants or the products) without `bonds`, cached."""
+        key = (gra is self.reactants, tuple(bonds))
+        if key not in self._broken_cache:
+            graph = nx.Graph(_nx(gra))
+            graph.remove_edges_from(bonds)
+            self._broken_cache[key] = _Broken(graph, tuple(bonds))
+        return self._broken_cache[key]
+
     def _transition_graphs(
         self,
         break_bonds1: Sequence[_Pair],
         break_bonds2: Sequence[_Pair],
         seen: list[tuple[frozenset[_Pair], frozenset[_Pair]]] | None,
     ) -> Iterator[tuple[ReactionGraph, dict[int, int]]]:
-        """The TS graphs whose broken reactants match the broken products."""
-        gra1 = nx.Graph(_nx(self.reactants))
-        gra1.remove_edges_from(break_bonds1)
-        gra2 = nx.Graph(_nx(self.products))
-        gra2.remove_edges_from(break_bonds2)
-        for mapping in _matcher(gra1, gra2).isomorphisms_iter():
+        """The TS graphs whose broken reactants match the broken products.
+
+        Only the atoms of `break_bonds2` decide the forming bonds, so with `seen` (the
+        results deduplicated by bond changes) the search maps just those atoms, one
+        isomorphism for each distinct map up to swaps of twin atoms (which give
+        isomorphic graphs). Without it, every isomorphism is walked.
+        """
+        if seen is None:
+            gra1 = nx.Graph(_nx(self.reactants))
+            gra1.remove_edges_from(break_bonds1)
+            gra2 = nx.Graph(_nx(self.products))
+            gra2.remove_edges_from(break_bonds2)
+            mappings = _matcher(gra1, gra2).isomorphisms_iter()
+        else:
+            mappings = _partial_isomorphisms(
+                self._broken(self.reactants, break_bonds1),
+                self._broken(self.products, break_bonds2),
+                sorted(set(itertools.chain.from_iterable(break_bonds2))),
+            )
+        for mapping in mappings:
             inverse = {v: k for k, v in mapping.items()}
             breaking = frozenset(break_bonds1)
             forming = frozenset(
@@ -357,6 +386,115 @@ class _CCV:
                 forming=forming,
             )
             yield gra, mapping
+
+
+@dataclass(frozen=True, eq=False)
+class _Broken:
+    """One side's graph without the bonds it breaks, for `_partial_isomorphisms`."""
+
+    graph: nx.Graph
+    bonds: tuple[_Pair, ...]
+
+    @functools.cached_property
+    def colours(self) -> dict[int, str]:
+        """Each atom's Weisfeiler-Lehman colour (on `symbol`): an invariant."""
+        hashes = nx.weisfeiler_lehman_subgraph_hashes(
+            self.graph, node_attr="symbol", iterations=3
+        )
+        return {
+            node: self.graph.nodes[node]["symbol"] + ":" + hs[-1]
+            for node, hs in hashes.items()
+        }
+
+    @functools.cached_property
+    def invariant(self) -> list[str]:
+        """The sorted colours: equal for isomorphic graphs."""
+        return sorted(self.colours.values())
+
+    @functools.cached_property
+    def twins(self) -> dict[int, int]:
+        """A class for each atom: twins share one.
+
+        Twins have the same symbol, neighbours (with the same edges) and partners in
+        `bonds`, so swapping two is an automorphism that keeps `bonds`.
+        """
+        gra = self.graph
+        partners: defaultdict[int, list[int]] = defaultdict(list)
+        for i, j in self.bonds:
+            partners[i].append(j)
+            partners[j].append(i)
+        classes: dict[tuple[object, ...], int] = {}
+        result: dict[int, int] = {}
+        for node in sorted(gra):
+            key = (
+                gra.nodes[node]["symbol"],
+                tuple(sorted(partners[node])),
+                tuple(
+                    sorted(
+                        (nbr, gra.edges[node, nbr].get("change")) for nbr in gra[node]
+                    )
+                ),
+            )
+            result[node] = classes.setdefault(key, node)
+        return result
+
+
+def _partial_isomorphisms(
+    broken1: _Broken, broken2: _Broken, atoms2: Sequence[int]
+) -> Iterator[dict[int, int]]:
+    """One isomorphism `broken1` → `broken2` for each distinct map of `atoms2` back.
+
+    A backtracking search picks the preimage of each atom of `atoms2` in turn and keeps
+    it if an isomorphism still exists with the choices so far fixed. A candidate must
+    have the same Weisfeiler-Lehman colour, and of unused twins of `broken1` only the
+    first is tried: twins keep its breaking bonds, which the caller compares the
+    forming bonds with, so swapping two changes nothing but the labels (the H of a
+    CH3, or lone H atoms). It sets a `label` on the nodes of both graphs.
+    """
+    if broken1.invariant != broken2.invariant:
+        return
+    gra1, gra2 = broken1.graph, broken2.graph
+    colours1, colours2 = broken1.colours, broken2.colours
+    twins = broken1.twins
+
+    def extend(fixed: dict[int, int]) -> dict[int, int] | None:
+        """An isomorphism mapping each key of `fixed` (in `gra2`) to its value."""
+        labels1: dict[int, object] = dict(colours1)
+        labels2: dict[int, object] = dict(colours2)
+        for k, (a2, a1) in enumerate(fixed.items()):
+            labels1[a1] = labels2[a2] = k
+        nx.set_node_attributes(gra1, labels1, "label")
+        nx.set_node_attributes(gra2, labels2, "label")
+        matcher = GraphMatcher(
+            gra1,
+            gra2,
+            node_match=lambda a, b: a["label"] == b["label"],
+            edge_match=lambda a, b: a.get("change") == b.get("change"),
+        )
+        return next(matcher.isomorphisms_iter(), None)
+
+    def search(
+        fixed: dict[int, int], mapping: dict[int, int]
+    ) -> Iterator[dict[int, int]]:
+        if len(fixed) == len(atoms2):
+            yield mapping
+            return
+        a2 = atoms2[len(fixed)]
+        used = set(fixed.values())
+        tried: set[int] = set()
+        for a1 in sorted(gra1):
+            if a1 in used or colours1[a1] != colours2[a2] or twins[a1] in tried:
+                continue
+            tried.add(twins[a1])
+            new_fixed = {**fixed, a2: a1}
+            # The current isomorphism already fits if it maps a1 to a2
+            new_mapping = mapping if mapping[a1] == a2 else extend(new_fixed)
+            if new_mapping is not None:
+                yield from search(new_fixed, new_mapping)
+
+    first = extend({})
+    if first is not None:
+        yield from search({}, first)
 
 
 def _bond_symbols(gra: MolGraph | StereoMolGraph) -> dict[_Pair, _BondSymbol]:

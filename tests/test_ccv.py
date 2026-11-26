@@ -181,3 +181,19 @@ def test_ts_graphs_two_rotations_give_no_rotation() -> None:
     for ts in pm.ts_graphs(rct_gra, prd_gra):
         assert ts.breaking
         assert ts.forming
+
+
+@pytest.mark.parametrize(
+    ("rct", "prd", "count"),
+    [
+        ("CC(C)CC(C)(C)C.[OH]", "C[C](C)CC(C)(C)C.O", 1),
+        ("C[N](CC)CCC", "C[N](CC)CCC", 15),
+    ],
+)
+def test_ts_graphs_symmetric_cases(rct: str, prd: str, count: int) -> None:
+    """Many equivalent H: the search maps only the forming bonds' atoms (seconds).
+
+    Walking every isomorphism of the broken graphs took a minute or more on these.
+    """
+    rct_gra, prd_gra = (pm.without_stereo(g) for g in _sides(rct, prd))
+    assert len(pm.ts_graphs(rct_gra, prd_gra)) == count
