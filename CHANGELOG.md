@@ -19,6 +19,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - The canonical TS, documented in `user_guide/02-identity.qmd` and tested:
   `canonical_direction(canonical_enantiomer(ts))` is the same for a TS, its reverse,
   its mirror image and the mirror image reversed (P60). No new function.
+- `from_reaction_smiles(smiles, *, charge=None, spin=None)` reads an atom-mapped
+  reaction SMILES into a `StereoReactionGraph` (P62): atom k is the atom with the k-th
+  smallest map number, each side is perceived as `from_smiles` does, and the `ts`
+  slots stay empty until TS sites. Every atom, H included, must be mapped, and both
+  sides must have the same map numbers; the default spin is the lower of the two
+  sides' radical counts.
 
 ### Changed
 

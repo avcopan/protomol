@@ -110,10 +110,23 @@ for srg in pm.ts_graphs(rct, prd):
 
 ## Atom-mapped reaction SMILES (the INCITE import)
 
-::: {.callout-note}
-Planned: Phase 2 (pm P29). Its name and atom order follow stereomol (D1).
-:::
+`from_reaction_smiles` reads an atom-mapped reaction SMILES. Atom k is the atom with the
+k-th smallest map number, and every atom, H included, must be written and mapped, on both
+sides. Each side is perceived as `from_smiles` does, and the `ts` slots of the stereo
+changes stay empty until TS sites:
 
 ```python
-rxn = pm.from_reaction_smiles("[CH3:1][H:2].[OH:3]>>[CH3:1].[H:2][OH:3]")  # PROPOSED: name
+>>> rxn = pm.from_reaction_smiles(
+...     "[C:1]([C:2]([H:7])([H:8])[H:9])([H:4])([H:5])[H:6].[O:3][H:10]"
+...     ">>[C:1]([C:2]([H:7])([H:8])[H:9])([H:5])[H:6].[H:4][O:3][H:10]"
+... )
+>>> rxn.breaking, rxn.forming
+(((0, 3),), ((2, 3),))
+>>> rxn == pm.examples.abstraction_ts()  # the same channel as `ts_graphs` gave above
+True
+>>> pm.from_reaction_smiles("[CH3:1][H:2].[OH:3]>>[CH3:1].[H:2][OH:3]")
+Traceback (most recent call last):
+...
+protomol._types.GraphError: '[CH3:1][H:2].[OH:3]' has implicit H; write and map every H as an atom
+
 ```

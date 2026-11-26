@@ -13,6 +13,7 @@ from pydantic import ValidationError
 from rdkit import Chem
 
 from ._backend import from_smg, to_smg
+from ._reaction import reaction_graph, relabel
 from ._stereo import (
     AtomStereo,
     AtropBond,
@@ -24,6 +25,7 @@ from ._stereo import (
 from ._types import (
     GraphError,
     StereoMolGraph,
+    StereoReactionGraph,
     _nx,
     neighbors,
     remove_stereo,
@@ -85,12 +87,73 @@ def from_smiles(
             (maximal pairing, then Hund's rule per atom: [CH2] and [O] → 2; O=O → 0).
 
     Raises:
-        GraphError: For an unparsable SMILES, a reaction SMILES (use `ts_graphs`), a
+        GraphError: For an unparsable SMILES, a reaction SMILES (use
+            `from_reaction_smiles`, or `ts_graphs` for unmapped sides), a
             charge that differs from the formal charges, or a spin of the wrong parity.
     """
     if ">" in smiles:
-        msg = f"{smiles!r} is a reaction SMILES; use `ts_graphs` for a reaction"
+        msg = f"{smiles!r} is a reaction SMILES; use `from_reaction_smiles`"
         raise GraphError(msg)
+    return _perceive(Chem.AddHs(_parse(smiles)), smiles, charge=charge, spin=spin)
+
+
+def from_reaction_smiles(
+    smiles: str, *, charge: int | None = None, spin: int | None = None
+) -> StereoReactionGraph:
+    """The stereo reaction graph of an atom-mapped reaction SMILES (P62).
+
+    Atom k is the atom with the k-th smallest map number. Each side is perceived as
+    `from_smiles` does; `without_stereo` gives the `ReactionGraph`. The `ts` slots of
+    the stereo changes stay empty until TS sites (P57).
+
+    >>> rxn = from_reaction_smiles("[H:1][H:2].[O:3][H:4]>>[H:1].[H:2][O:3][H:4]")
+    >>> rxn.symbols
+    ('H', 'H', 'O', 'H')
+    >>> rxn.breaking, rxn.forming
+    (((0, 1),), ((1, 2),))
+
+    Args:
+        smiles: A reaction SMILES "reactants>>products" with no agents, in which every
+            atom, H included, is written and mapped, and both sides have the same map
+            numbers.
+        charge: Checked against the sum of formal charges on each side; default: that
+            sum.
+        spin: Unpaired electrons (2S); default: the lower of the two sides' radical
+            electron counts (`from_smiles`'s default).
+
+    Raises:
+        GraphError: For a SMILES that isn't a reaction SMILES or that RDKit can't
+            parse, agents, an unmapped atom or implicit H, a map number used twice on
+            a side, sides with different map numbers, symbols or charges, or a charge
+            or spin `from_smiles` rejects.
+    """
+    sides = smiles.split(">")
+    if len(sides) != 3:  # noqa: PLR2004
+        msg = f"{smiles!r} is not a reaction SMILES (reactants>>products)"
+        raise GraphError(msg)
+    rsmi, agents, psmi = sides
+    if agents:
+        msg = f"{smiles!r} has agents ({agents!r}); write them on both sides"
+        raise GraphError(msg)
+    rmol, pmol = _parse(rsmi), _parse(psmi)
+    rmap, pmap = _map_numbers(rmol, rsmi), _map_numbers(pmol, psmi)
+    if sorted(rmap) != sorted(pmap):
+        msg = f"The two sides of {smiles!r} have different map numbers"
+        raise GraphError(msg)
+    if spin is None:
+        spin = min(_radical_electrons(rmol), _radical_electrons(pmol))
+    rgra, pgra = (
+        relabel(_perceive(mol, side, charge=charge, spin=spin), _argsort(maps))
+        for mol, side, maps in ((rmol, rsmi, rmap), (pmol, psmi, pmap))
+    )
+    return reaction_graph(rgra, pgra)
+
+
+def _parse(smiles: str) -> Chem.Mol:
+    """RDKit's molecule for a SMILES, in SMILES order, before `Chem.AddHs`.
+
+    `[H]` atoms are kept, and the chiral tags are read as `from_smiles` documents.
+    """
     params = Chem.SmilesParserParams()
     params.removeHs = False
     mol = Chem.MolFromSmiles(smiles, params)
@@ -99,8 +162,13 @@ def from_smiles(
         raise GraphError(msg)
     _restore_dropped_chiral_tags(mol, smiles, params)
     _place_lone_pairs_like_implicit_hs(mol)
-    mol = Chem.AddHs(mol)
+    return mol
 
+
+def _perceive(
+    mol: Chem.Mol, smiles: str, *, charge: int | None, spin: int | None
+) -> StereoMolGraph:
+    """`from_smiles`'s graph of `mol` (with explicit H), after its charge check."""
     formal_charge = sum(atom.GetFormalCharge() for atom in mol.GetAtoms())
     if charge is not None and charge != formal_charge:
         msg = (
@@ -109,8 +177,33 @@ def from_smiles(
         )
         raise GraphError(msg)
     if spin is None:
-        spin = sum(atom.GetNumRadicalElectrons() for atom in mol.GetAtoms())
+        spin = _radical_electrons(mol)
     return _from_rdkit_mol(mol, charge=formal_charge, spin=spin)
+
+
+def _radical_electrons(mol: Chem.Mol) -> int:
+    """RDKit's count of the unpaired electrons of `mol`."""
+    return sum(atom.GetNumRadicalElectrons() for atom in mol.GetAtoms())
+
+
+def _map_numbers(mol: Chem.Mol, smiles: str) -> list[int]:
+    """The map numbers of `mol`'s atoms; each atom has its own, and no implicit H."""
+    maps = [atom.GetAtomMapNum() for atom in mol.GetAtoms()]
+    if 0 in maps:
+        msg = f"{smiles!r} has an unmapped atom; map every atom, H included"
+        raise GraphError(msg)
+    if any(atom.GetTotalNumHs() for atom in mol.GetAtoms()):
+        msg = f"{smiles!r} has implicit H; write and map every H as an atom"
+        raise GraphError(msg)
+    if len(set(maps)) != len(maps):
+        msg = f"{smiles!r} uses a map number twice"
+        raise GraphError(msg)
+    return maps
+
+
+def _argsort(values: list[int]) -> list[int]:
+    """The indices of `values` in increasing order of value."""
+    return sorted(range(len(values)), key=values.__getitem__)
 
 
 def _restore_dropped_chiral_tags(

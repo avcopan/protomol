@@ -50,7 +50,7 @@ def test_charge_mismatch_raises() -> None:
         pm.from_smiles("[NH4+]", charge=0)
 
 
-def test_reaction_smiles_raises() -> None:
+def test_from_smiles_rejects_reaction_smiles() -> None:
     """A reaction SMILES raises GraphError."""
     with pytest.raises(pm.GraphError, match="reaction SMILES"):
         pm.from_smiles("CC.[OH]>>C[CH2].O")
@@ -312,3 +312,60 @@ def test_backend_drops_chain_ls_with_a_warning() -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         to_smg(pm.from_smiles("C=C"))
+
+
+def test_reaction_smiles_atoms_follow_map_numbers() -> None:
+    """Atom k is the atom with the k-th smallest map number, on both sides."""
+    g = pm.from_reaction_smiles("[H:5][O:3][H:1].[H:4]>>[H:5][O:3].[H:1][H:4]")
+    assert g.symbols == ("H", "O", "H", "H")
+    assert (g.breaking, g.forming) == (((0, 1),), ((0, 2),))
+
+
+def test_reaction_smiles_stereo_independent_of_smiles_order() -> None:
+    """Two writings of the same mapped reaction give the same graph (LS relabelled)."""
+    prd = ">>[C:1]([F:2])([Cl:3])[Br:4].[H:5][O:6]"
+    rxn1 = "[C@:1]([F:2])([Cl:3])([Br:4])[H:5].[O:6]" + prd
+    rxn2 = "[Cl:3][C@@:1]([F:2])([Br:4])[H:5].[O:6]" + prd.replace(
+        "[H:5][O:6]", "[O:6][H:5]"
+    )
+    g1, g2 = pm.from_reaction_smiles(rxn1), pm.from_reaction_smiles(rxn2)
+    assert g1 == g2
+    assert pm.reactants(g1) == pm.from_smiles("[C@](F)(Cl)(Br)[H].[O]")
+    (change,) = g1.stereo_changes
+    assert change.reactant is not None
+    assert change.reactant.parity is not None
+    assert change.ts is None
+
+
+def test_reaction_smiles_spin_default_is_the_lower_side() -> None:
+    """The default spin is the lower of the sides' radical counts; it can be given."""
+    rxn = "[C:1]([H:2])([H:3])=[C:4]([H:5])[H:6]>>[C:1]([H:2])([H:3])[C:4]([H:5])[H:6]"
+    assert pm.from_reaction_smiles(rxn).spin == 0
+    assert pm.from_reaction_smiles(rxn, spin=2).spin == 2
+
+
+def test_reaction_smiles_charge() -> None:
+    """The charge is the formal charges' sum, and an explicit one is checked."""
+    rxn = "[N+:1]([H:2])([H:3])([H:4])[H:5]>>[N:1]([H:2])([H:3])[H:4].[H+:5]"
+    assert pm.from_reaction_smiles(rxn).charge == 1
+    with pytest.raises(pm.GraphError, match="formal charges"):
+        pm.from_reaction_smiles(rxn, charge=0)
+
+
+@pytest.mark.parametrize(
+    ("smiles", "match"),
+    [
+        ("[H:1][H:2]", "not a reaction SMILES"),
+        ("[H:1][H:2]>[O:3]>[H:1].[H:2]", "agents"),
+        ("[H:1][H:2]>>[H:1].[H]", "unmapped"),
+        ("[CH4:1]>>[CH3:1].[H:2]", "implicit H"),
+        ("[H:1][H:1]>>[H:1].[H:1]", "twice"),
+        ("[H:1][H:2]>>[H:1].[H:3]", "different map numbers"),
+        ("[H:1][H:2]>>[H:1].[F:2]", "symbols"),
+        ("[H:1]([H:2]>>[H:1].[H:2]", "parse"),
+    ],
+)
+def test_bad_reaction_smiles_raises(smiles: str, match: str) -> None:
+    """A malformed or partly mapped reaction SMILES raises GraphError."""
+    with pytest.raises(pm.GraphError, match=match):
+        pm.from_reaction_smiles(smiles)

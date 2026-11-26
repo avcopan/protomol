@@ -30,7 +30,7 @@ from ._reaction import (
     reverse,
     without_stereo,
 )
-from ._smiles import from_smiles
+from ._smiles import from_reaction_smiles, from_smiles
 from ._stereo import (
     AtomStereo,
     AtropBond,
@@ -89,6 +89,7 @@ __all__ = [
     "examples",
     "from_geometry",
     "from_json",
+    "from_reaction_smiles",
     "from_smiles",
     "geometry_mismatches",
     "invert",
