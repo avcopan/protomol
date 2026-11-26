@@ -41,8 +41,7 @@ of its mirror image stand in for CREST's conformers:
 ```python
 >>> smg = pm.examples.species()
 >>> conformers = [pm.embed(smg), pm.embed(pm.enantiomer(smg))]  # stand in for CREST's
->>> agree = pm.GeometryMismatches(missing_bonds=(), extra_bonds=(), stereo=())
->>> kept = [geo for geo in conformers if pm.geometry_mismatches(smg, geo) == agree]
+>>> kept = [geo for geo in conformers if not pm.geometry_mismatches(smg, geo)]
 >>> len(kept)
 1
 

@@ -30,11 +30,14 @@ True
 A conformer search or an optimization can invert a centre, flip a bond or break one. A
 structure is kept only if it is still the workflow's graph. `geometry_mismatches` perceives
 the bonds from covalent radii, as `from_geometry` does, and reads each determined LS's
-parity from the coordinates. All three fields empty means they agree:
+parity from the coordinates. All three fields empty means they agree, and the result is
+false, like an empty container:
 
 ```python
 >>> pm.geometry_mismatches(smg, geo)
 GeometryMismatches(missing_bonds=(), extra_bonds=(), stereo=())
+>>> bool(pm.geometry_mismatches(smg, geo))
+False
 
 ```
 

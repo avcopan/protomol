@@ -270,6 +270,14 @@ def test_geometry_mismatches_undetermined() -> None:
     assert pm.geometry_mismatches(plain, geo) == AGREE
 
 
+def test_geometry_mismatches_bool() -> None:
+    """True when any field is non-empty (P77)."""
+    assert not AGREE
+    assert pm.GeometryMismatches(missing_bonds=((0, 1),), extra_bonds=(), stereo=())
+    assert pm.GeometryMismatches(missing_bonds=(), extra_bonds=((0, 1),), stereo=())
+    assert pm.GeometryMismatches(missing_bonds=(), extra_bonds=(), stereo=(1,))
+
+
 def test_geometry_mismatches_bonds() -> None:
     """A wrong bond is missing (in the graph only) and extra (in the geometry only)."""
     gra = pm.MolGraph(symbols=["O", "H", "H"], bonds=[(0, 1), (1, 2)])

@@ -83,8 +83,8 @@ def from_geometry(geo: Geometry) -> StereoMolGraph:
 class GeometryMismatches:
     """Where a graph and a geometry disagree (`geometry_mismatches`).
 
-    Each field is a sorted tuple, and all three empty means they agree. There is no
-    `__bool__` (P48): test the fields.
+    Each field is a sorted tuple. It is true when any field is non-empty, like a
+    container, so `not geometry_mismatches(gra, geo)` means they agree (P77).
 
     Attributes:
         missing_bonds: The graph's bonds that the geometry doesn't have.
@@ -96,6 +96,10 @@ class GeometryMismatches:
     missing_bonds: tuple[tuple[int, int], ...]
     extra_bonds: tuple[tuple[int, int], ...]
     stereo: tuple[int | tuple[int, int], ...]
+
+    def __bool__(self) -> bool:
+        """True if the graph and the geometry disagree anywhere."""
+        return bool(self.missing_bonds or self.extra_bonds or self.stereo)
 
 
 def geometry_mismatches(gra: AnyGraph, geo: Geometry) -> GeometryMismatches:
@@ -112,6 +116,8 @@ def geometry_mismatches(gra: AnyGraph, geo: Geometry) -> GeometryMismatches:
     >>> gra = examples.species()
     >>> geometry_mismatches(gra, embed(gra))
     GeometryMismatches(missing_bonds=(), extra_bonds=(), stereo=())
+    >>> bool(geometry_mismatches(gra, embed(gra)))
+    False
     >>> geometry_mismatches(gra, embed(from_smiles(r"C[C@H](O)/C=C/C"))).stereo
     (1,)
 
