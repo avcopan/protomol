@@ -20,6 +20,7 @@ from ._geometry import (
     from_geometry,
     geometry_mismatches,
 )
+from ._isomers import stereoisomers
 from ._json import from_json, to_json
 from ._low_t import low_t
 from ._reaction import (
@@ -107,6 +108,7 @@ __all__ = [
     "reverse",
     "site",
     "stereo_at",
+    "stereoisomers",
     "to_json",
     "ts_graphs",
     "with_stereo",

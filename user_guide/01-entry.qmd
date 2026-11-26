@@ -29,26 +29,33 @@ True
 
 ```
 
-::: {.callout-note}
-Planned: Phase 5 (`stereoisomers`).
-:::
+`stereoisomers` expands every undetermined LS into the distinct, determined graphs, with
+the atom indices of `gra`; both mirror images are kept:
 
 ```python
-for smg in pm.stereoisomers(gra):      # (R) and (S), as two determined graphs
-    run_species_workflow(smg)          # ae, illustrative
-```
-
-Until then, the same enumeration by hand, for the one undetermined centre:
-
-```python
->>> ls = pm.stereo_at(gra, 1)
->>> isomers = [pm.with_stereo(gra, ls_) for ls_ in pm.isomers(ls)]
+>>> isomers = pm.stereoisomers(gra)    # (R) and (S), as two determined graphs
 >>> [pm.is_determined(smg) for smg in isomers]
 [True, True]
 >>> [pm.stereo_at(smg, 1).parity for smg in isomers]
 [1, -1]
->>> isomers[0] == isomers[1]
-False
+>>> mirror = pm.enantiomer(isomers[0])  # the same graph as isomers[1], up to numbering
+>>> pm.canonical_json(mirror) == pm.canonical_json(isomers[1])
+True
+>>> # one workflow each:
+>>> # for smg in isomers:
+>>> #     run_species_workflow(smg)    # ae, illustrative
+
+```
+
+Configurations that give the same graph are listed once: butane-2,3-diol has two centres
+but three stereoisomers, as (R,S) and (S,R) are one meso form. A `MolGraph` (no stereo)
+first gets its low-T sites:
+
+```python
+>>> len(pm.stereoisomers(pm.from_smiles("CC(O)C(O)C")))
+3
+>>> len(pm.stereoisomers(pm.without_stereo(gra)))
+2
 
 ```
 

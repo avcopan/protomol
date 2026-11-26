@@ -25,6 +25,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   slots stay empty until TS sites. Every atom, H included, must be mapped, and both
   sides must have the same map numbers; the default spin is the lower of the two
   sides' radical counts.
+- `stereoisomers(g)` for `MolGraph` and `StereoMolGraph` (P65): the distinct
+  determined stereoisomers, both mirror images kept, with `g`'s atom indices. Every
+  undetermined LS takes each configuration, determined ones are kept, and the results
+  are deduplicated up to atom numbering; a `MolGraph` first gets its low-T sites. Gives
+  StereoMolGraph SI-001's 10 stereoisomers. An allene's two collapse to one, as the
+  back-end drops chain LS (P45). Reaction graphs come with TS sites (P74).
 
 ### Changed
 

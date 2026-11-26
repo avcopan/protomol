@@ -81,6 +81,7 @@ name = "Module Layering"
 type = "layers"
 layers = [
     "protomol._display",
+    "protomol._isomers",
     "protomol._geometry | protomol._low_t",
     "protomol._smiles | protomol._canon | protomol._compare",
     "protomol._backend | protomol._json | protomol._lewis",
