@@ -84,6 +84,7 @@ layers = [
     "protomol._isomers",
     "protomol._geometry | protomol._low_t",
     "protomol._smiles | protomol._canon | protomol._compare",
+    "protomol._ts",
     "protomol._backend | protomol._json | protomol._lewis",
     "protomol._types",
     "protomol._stereo",
