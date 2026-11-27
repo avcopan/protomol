@@ -11,6 +11,7 @@ from ._lewis import _lewis
 from ._reaction import products, reactants
 from ._smiles import _from_rdkit_mol
 from ._stereo import AtropBond, PlanarBond, StereoChange, site
+from ._ts import _with_ts_slot
 from ._types import (
     _LS,
     MolGraph,
@@ -41,8 +42,11 @@ def low_t(
     depend on which Lewis structure is read (open question 11).
 
     A reaction graph's two sides are reassigned separately: each `StereoChange` slot
-    follows its side's site, and a change left with no LS in any slot is removed. The
-    TS slots are kept as they are (TS sites come with Phase 5).
+    follows its side's site, and a change left with no LS on either side is removed
+    (no TS-only sites, P68). A
+    change at a TS site gets its `ts` slot by the TS-slot rules (P70, as
+    `reaction_graph` does), keeping the given one where the rules allow it; other `ts`
+    slots are kept as they are.
 
     >>> from protomol import from_smiles, without_stereo
     >>> gra = from_smiles("C[C@H](N)CC")
@@ -66,7 +70,7 @@ def low_t(
         else {}
     )
     items: list[_LS | StereoChange] = []
-    for key in sorted(rls.keys() | pls.keys() | ts.keys(), key=_site_key):
+    for key in sorted(rls.keys() | pls.keys(), key=_site_key):
         r, p, t = rls.get(key), pls.get(key), ts.get(key)
         if r == p and t is None:
             assert r is not None  # noqa: S101 (for the type checker)
@@ -78,7 +82,9 @@ def low_t(
         "breaking": g.breaking,
         "forming": g.forming,
     }
-    return StereoReactionGraph(**data, **_stereo_fields(items, reaction=True))
+    return _with_ts_slot(
+        StereoReactionGraph(**data, **_stereo_fields(items, reaction=True))
+    )
 
 
 def _low_t_species(gra: MolGraph | StereoMolGraph) -> StereoMolGraph:

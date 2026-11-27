@@ -22,7 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `from_reaction_smiles(smiles, *, charge=None, spin=None)` reads an atom-mapped
   reaction SMILES into a `StereoReactionGraph` (P62): atom k is the atom with the k-th
   smallest map number, each side is perceived as `from_smiles` does, and the `ts`
-  slots stay empty until TS sites. Every atom, H included, must be mapped, and both
+  slots are set as `reaction_graph` sets them. Every atom, H included, must be mapped, and both
   sides must have the same map numbers; the default spin is the lower of the two
   sides' radical counts.
 - `stereoisomers(g)` for `MolGraph` and `StereoMolGraph` (P65): the distinct
@@ -34,6 +34,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- TS sites (P67-P74, P80, P81): the `ts` slot of each change at a TS site (an LS with
+  an atom in the reacting core: the atoms of the breaking and forming bonds, or of the
+  changing site when no bond changes) is now set by rule, where it was always `None`.
+  One side only: that side's LS, or undetermined when the other side has a triple
+  bond there (a bifurcation); a centre that swaps a neighbour: the backside
+  `TrigonalBipyramidal` (inversion) or a `Tetrahedral` with `None` where the leaving
+  and attacking atoms meet (retention); a rotation: an `AtropBond`, both parities as
+  two channels; a lone-pair inversion: `None`. `ts_graphs`, `reaction_graph`,
+  `from_reaction_smiles` and `low_t` set it; constructors don't. A TS's graph, and so
+  its canonical JSON, changes (`examples.abstraction_ts()` among them); species
+  graphs don't. `ts_graphs` of a rotation now gives two channels.
 - `canonical_form`, `canonical_json`, `relabel` and `canonical_direction` accept a
   union argument (`AnyGraph`, or `ReactionGraph | StereoReactionGraph` for
   `canonical_direction`), which ty rejected before; a precise argument still gives the

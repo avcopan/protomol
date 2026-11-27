@@ -8,6 +8,7 @@ from collections.abc import Sequence
 from typing import Any, overload
 
 from ._stereo import AtropBond, PlanarBond, StereoChange
+from ._ts import _with_ts_slot
 from ._types import (
     _LS,
     AnyGraph,
@@ -38,8 +39,10 @@ def reaction_graph(
 
     Bonds only in the reactant are breaking, and bonds only in the product are forming.
     Equal LS stay unchanged (`atom_stereo`, `bond_stereo`); others become a
-    `StereoChange(reactant=, product=)` in `stereo_changes`, with the TS slot empty
-    (fleeting stereo comes in Phase 5).
+    `StereoChange(reactant=, product=, ts=)` in `stereo_changes`. A change at a TS
+    site (an LS with an atom in the reacting core, P67) gets its `ts` slot by the
+    TS-slot rules (P70); where they allow two (the twisted TSs of a rotation), it is
+    their LS undetermined. Other changes leave it empty.
 
     >>> r = MolGraph(symbols=["H", "H", "H"], bonds=[(0, 1)])
     >>> p = MolGraph(symbols=["H", "H", "H"], bonds=[(1, 2)])
@@ -90,7 +93,9 @@ def reaction_graph(
             items.append(r)
         else:
             items.append(StereoChange(reactant=r, product=p))
-    return StereoReactionGraph(**data, **_stereo_fields(items, reaction=True))
+    return _with_ts_slot(
+        StereoReactionGraph(**data, **_stereo_fields(items, reaction=True))
+    )
 
 
 @overload

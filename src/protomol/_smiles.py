@@ -104,8 +104,8 @@ def from_reaction_smiles(
     """The stereo reaction graph of an atom-mapped reaction SMILES (P62).
 
     Atom k is the atom with the k-th smallest map number. Each side is perceived as
-    `from_smiles` does; `without_stereo` gives the `ReactionGraph`. The `ts` slots of
-    the stereo changes stay empty until TS sites (P57).
+    `from_smiles` does; `without_stereo` gives the `ReactionGraph`. The `ts` slots
+    are set as `reaction_graph` sets them (P73).
 
     >>> rxn = from_reaction_smiles("[H:1][H:2].[O:3][H:4]>>[H:1].[H:2][O:3][H:4]")
     >>> rxn.symbols

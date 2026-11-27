@@ -47,12 +47,15 @@ def test_reaction_graph_bond_changes() -> None:
 
 
 def test_reaction_graph_stereo_change() -> None:
-    """An LS that differs between the sides becomes a StereoChange."""
+    """An LS that differs between the sides becomes a StereoChange.
+
+    Br3 leaves and I5 attacks with inversion: the TS slot is the backside TBP.
+    """
     gra = _stereo_reaction()
     (change,) = gra.stereo_changes
     assert change.reactant == pm.Tetrahedral(atoms=(0, 1, 2, 3, 4), parity=1)
     assert change.product == pm.Tetrahedral(atoms=(0, 1, 2, 5, 4), parity=-1)
-    assert change.ts is None
+    assert change.ts == pm.TrigonalBipyramidal(atoms=(0, 3, 5, 1, 2, 4), parity=1)
     assert gra.atom_stereo == ()
 
 

@@ -103,11 +103,16 @@ def test_ts_graphs_with_stereo_splits_diastereotopic_atoms() -> None:
 
 
 def test_ts_graphs_with_stereo_keeps_a_rotation() -> None:
-    """(Z) → (E): no bond changes, one channel with the one PlanarBond change."""
+    """(Z) → (E): no bond changes, the one PlanarBond change, twisted either way.
+
+    The two channels are the mirror-image twisted TSs (P39, P70).
+    """
     rct_gra, prd_gra = _sides(r"[CH2]/C=C\C", r"[CH2]/C=C/C")
-    (ts,) = pm.ts_graphs(rct_gra, prd_gra)
-    assert (ts.breaking, ts.forming) == ((), ())
-    assert [_site(change) for change in ts.stereo_changes] == [(1, 2)]
+    channels = pm.ts_graphs(rct_gra, prd_gra)
+    assert len(channels) == 2
+    for ts in channels:
+        assert (ts.breaking, ts.forming) == ((), ())
+        assert [_site(change) for change in ts.stereo_changes] == [(1, 2)]
 
 
 def test_stereo_isomorphism_survives_relabelling() -> None:
@@ -171,6 +176,8 @@ def test_ts_graphs_amine_inversion() -> None:
     assert [_site(change) for change in ts.stereo_changes] == [1]
 
 
+# The double H swaps have no TS-slot rule (P70's last row)
+@pytest.mark.filterwarnings("ignore:No TS-slot rule")
 def test_ts_graphs_two_rotations_give_no_rotation() -> None:
     """(Z,Z) → (E,E) hexa-2,4-diene: no channel without bond changes (P44).
 

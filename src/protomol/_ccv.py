@@ -22,6 +22,7 @@ from ._reaction import products as _products
 from ._reaction import reactants as _reactants
 from ._reaction import reaction_graph, relabel, reverse
 from ._stereo import AtropBond, PlanarBond, StereoChange, Tetrahedral, isomers
+from ._ts import _with_ts_slots
 from ._types import (
     _LS,
     GraphError,
@@ -68,7 +69,9 @@ def ts_graphs(
     sites its reaction touches, so diastereotopic atoms give separate channels (the two
     H of C3 in (R)-butan-2-ol, say), and every other LS stays unchanged: a channel that
     would need a stereo change at an untouched site is not one step, and is dropped.
-    The `ts` slots stay empty: fleeting stereo comes in Phase 5.
+    Each change at a TS site (an LS with an atom in the reacting core, P67) gets its
+    `ts` slot by the TS-slot rules (P70), and a slot with two configurations (the two
+    twisted TSs of a rotation, P39) gives two channels.
 
     `extra_breaks` is the most bonds the search breaks and re-forms beyond those the
     bond counts require.
@@ -130,8 +133,9 @@ def _no_bond_change_channels(
     The change is another configuration of one determined LS of the reactants: a bond
     LS (a rotation) or a `Tetrahedral` with a lone-pair slot (an inversion). The
     product side must be stereo-isomorphic to `products`, and the channels are
-    deduplicated as in `_stereo_channels`. The caller checks that the inputs are not
-    stereo-isomorphic: a trivial LS (a terminal =CH2) would otherwise give a rotation.
+    deduplicated as in `_stereo_channels`, after the `ts` slots are set. The caller
+    checks that the inputs are not stereo-isomorphic: a trivial LS (a terminal =CH2)
+    would otherwise give a rotation.
     """
     unchanged = reaction_graph(reactants, reactants)
     found: list[StereoReactionGraph] = []
@@ -146,7 +150,7 @@ def _no_bond_change_channels(
                 continue
             cand = with_stereo(unchanged, StereoChange(reactant=ls, product=alt))
             if isomorphism(_products(cand), products) is not None:
-                found.append(cand)
+                found.extend(_with_ts_slots(cand))
     return deduplicate(found)
 
 
@@ -159,7 +163,8 @@ def _stereo_channels(
     touches (its centre, or a bond's end, is in a breaking or forming bond) get every
     configuration on each side; a side whose LS is undetermined stays undetermined.
     The other sites keep their reactant LS on both sides (P44: no stereo change at an
-    untouched site), so the result is empty if the inputs need one.
+    untouched site), so the result is empty if the inputs need one. Each match then
+    takes every combination of `ts` slots (`_with_ts_slots`).
     Candidates are deduplicated, as in stereomolgraph's `generate_stereoisomers`, by
     frozen stereomolgraph graphs, whose hash and `==` are stereo-aware isomorphism.
     """
@@ -182,7 +187,7 @@ def _stereo_channels(
             isomorphism(_reactants(cand), reactants) is not None
             and isomorphism(_products(cand), products) is not None
         ):
-            found.append(cand)
+            found.extend(_with_ts_slots(cand))
     return deduplicate(found)
 
 

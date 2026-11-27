@@ -334,7 +334,7 @@ def test_reaction_smiles_stereo_independent_of_smiles_order() -> None:
     (change,) = g1.stereo_changes
     assert change.reactant is not None
     assert change.reactant.parity is not None
-    assert change.ts is None
+    assert change.ts == change.reactant  # still pyramidal at the TS (P70)
 
 
 def test_reaction_smiles_spin_default_is_the_lower_side() -> None:
