@@ -10,6 +10,7 @@ import numpy as np
 import pytest
 
 import protomol as pm
+from protomol._geometry import _ls_from_coords
 
 SPECIES_SMILES = r"C[C@@H](O)/C=C/C"  # pm.examples.species()
 
@@ -239,7 +240,9 @@ def test_embed_no_lewis_structure() -> None:
         pm.embed(pm.MolGraph(symbols=["C"], bonds=[]))
 
 
-AGREE = pm.GeometryMismatches(missing_bonds=(), extra_bonds=(), stereo=())
+AGREE = pm.GeometryMismatches(
+    missing_bonds=(), extra_bonds=(), reacting_bonds=(), stereo=()
+)
 
 
 @pytest.mark.parametrize("smiles", DETERMINED)
@@ -273,9 +276,18 @@ def test_geometry_mismatches_undetermined() -> None:
 def test_geometry_mismatches_bool() -> None:
     """True when any field is non-empty (P77)."""
     assert not AGREE
-    assert pm.GeometryMismatches(missing_bonds=((0, 1),), extra_bonds=(), stereo=())
-    assert pm.GeometryMismatches(missing_bonds=(), extra_bonds=((0, 1),), stereo=())
-    assert pm.GeometryMismatches(missing_bonds=(), extra_bonds=(), stereo=(1,))
+    assert pm.GeometryMismatches(
+        missing_bonds=((0, 1),), extra_bonds=(), reacting_bonds=(), stereo=()
+    )
+    assert pm.GeometryMismatches(
+        missing_bonds=(), extra_bonds=((0, 1),), reacting_bonds=(), stereo=()
+    )
+    assert pm.GeometryMismatches(
+        missing_bonds=(), extra_bonds=(), reacting_bonds=(), stereo=(1,)
+    )
+    assert pm.GeometryMismatches(
+        missing_bonds=(), extra_bonds=(), reacting_bonds=((0, 1),), stereo=()
+    )
 
 
 def test_geometry_mismatches_bonds() -> None:
@@ -288,15 +300,83 @@ def test_geometry_mismatches_bonds() -> None:
     assert result.stereo == ()
 
 
-def test_geometry_mismatches_reaction() -> None:
-    """A reaction graph agrees with either side's geometry (changing bonds skipped)."""
-    ts = pm.examples.abstraction_ts()
-    for side in (pm.reactants(ts), pm.products(ts)):
-        assert pm.geometry_mismatches(ts, pm.embed(side)) == AGREE
+def test_geometry_mismatches_end_points() -> None:
+    """A reaction graph's geometry is its TS's: an end point's bonds aren't partial."""
+    ts = pm.examples.abstraction_ts()  # C0-H3 breaks, O2-H3 forms
+    rct, prd = pm.reactants(ts), pm.products(ts)
+    assert pm.geometry_mismatches(rct, pm.embed(rct)) == AGREE
+    for side in (rct, prd):  # one bond full, the other far
+        result = pm.geometry_mismatches(ts, pm.embed(side))
+        assert result.reacting_bonds == ((0, 3), (2, 3))
+    # A TS: H3 between C0 and O2, both bonds partial
+    geo = pm.embed(rct)
+    xyz = np.array(geo.coordinates)
+    axis = (xyz[3] - xyz[0]) / np.linalg.norm(xyz[3] - xyz[0])
+    xyz[3] = xyz[0] + 1.3 * axis
+    xyz[2] = xyz[3] + 1.25 * axis
+    side = np.cross(axis, [0.0, 0.0, 1.0])
+    xyz[9] = xyz[2] + 0.97 * side / np.linalg.norm(side)
+    ts_geo = ag.Geometry(symbols=geo.symbols, coordinates=xyz, charge=0, spin=1)
+    assert pm.geometry_mismatches(ts, ts_geo) == AGREE
+
+
+def _sn2_ts_geometry(srg: pm.StereoReactionGraph, center: int) -> ag.Geometry:
+    """A backside SN2 TS from an embedding of the reactants.
+
+    The leaving atom stays on its axis at 1.3x its bond, the other neighbours fold
+    into the plane through the centre, and the attacking atom comes in from the other
+    side.
+    """
+    ((leaving,),) = [set(b) - {center} for b in srg.breaking]
+    ((attacking,),) = [set(b) - {center} for b in srg.forming]
+    geo = pm.embed(pm.reactants(srg))
+    xyz = np.array(geo.coordinates)
+    axis = xyz[leaving] - xyz[center]
+    length = np.linalg.norm(axis)
+    axis /= length
+    for nbr in pm.neighbors(pm.reactants(srg), center):
+        if nbr != leaving:
+            vec = xyz[nbr] - xyz[center]
+            flat = vec - np.dot(vec, axis) * axis
+            xyz[nbr] = xyz[center] + flat / np.linalg.norm(flat) * np.linalg.norm(vec)
+    xyz[leaving] = xyz[center] + 1.3 * length * axis
+    xyz[attacking] = xyz[center] - 1.3 * 2.14 * axis  # C-I: 2.14 A
+    return ag.Geometry(
+        symbols=geo.symbols, coordinates=xyz, charge=geo.charge, spin=geo.spin
+    )
+
+
+def test_geometry_mismatches_sn2_ts() -> None:
+    """An SN2 TS geometry reads as the backside TBP; its mirror image doesn't."""
+    rct, prd = pm.from_smiles("F[C@H](Cl)Br.[I-]"), pm.from_smiles("F[C@@H](Cl)I.[Br-]")
+    (backside,) = pm.ts_graphs(rct, prd)
+    geo = _sn2_ts_geometry(backside, 1)
+    (change,) = backside.stereo_changes
+    assert isinstance(change.ts, pm.TrigonalBipyramidal)
+    xyz = np.asarray(geo.coordinates)
+    assert _ls_from_coords(change.ts, xyz) == change.ts  # read, not just undecided
+    assert pm.geometry_mismatches(backside, geo) == AGREE
+    mirror = ag.reflect(geo, [0.0, 0.0, 1.0])
+    assert pm.geometry_mismatches(backside, mirror).stereo == (1,)
+
+
+def test_geometry_mismatches_twisted_ts() -> None:
+    """A twisted but-2-ene TS agrees with one AtropBond parity; reflected, the other."""
+    plus, minus = pm.ts_graphs(pm.from_smiles(r"C/C=C\C"), pm.from_smiles("C/C=C/C"))
+    geo = ag.twist(pm.embed(pm.reactants(plus)), (1, 2), 90, degrees=True)
+    mirror = ag.reflect(geo, [0.0, 0.0, 1.0])
+    # The reflection also inverts the CH3 sites' trivial LS: look at C1=C2 only
+    agree = [
+        [(1, 2) not in pm.geometry_mismatches(ts, g).stereo for ts in (plus, minus)]
+        for g in (geo, mirror)
+    ]
+    assert agree in ([[True, False], [False, True]], [[False, True], [True, False]])
+    # An end point is planar: neither twist is contradicted
+    assert pm.geometry_mismatches(plus, pm.embed(pm.reactants(plus))) == AGREE
 
 
 def test_geometry_mismatches_reaction_stereo() -> None:
-    """Only the LS that don't change are compared on a reaction graph."""
+    """The unchanged LS and the ts slots are compared on a reaction graph."""
     ts = pm.examples.stereoisomerization_ts()
     for side in (pm.reactants(ts), pm.products(ts)):
         assert pm.geometry_mismatches(ts, pm.embed(side)) == AGREE

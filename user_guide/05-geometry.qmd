@@ -35,7 +35,7 @@ false, like an empty container:
 
 ```python
 >>> pm.geometry_mismatches(smg, geo)
-GeometryMismatches(missing_bonds=(), extra_bonds=(), stereo=())
+GeometryMismatches(missing_bonds=(), extra_bonds=(), reacting_bonds=(), stereo=())
 >>> bool(pm.geometry_mismatches(smg, geo))
 False
 

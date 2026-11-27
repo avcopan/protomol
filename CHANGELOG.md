@@ -45,6 +45,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `from_reaction_smiles` and `low_t` set it; constructors don't. A TS's graph, and so
   its canonical JSON, changes (`examples.abstraction_ts()` among them); species
   graphs don't. `ts_graphs` of a rotation now gives two channels.
+- `geometry_mismatches` takes a reaction graph's geometry to be its TS's (P69, P82):
+  it reads the determined `ts` slots too (a `TrigonalBipyramidal` as stereomolgraph
+  reads one: the widest angle is axial), and its new `reacting_bonds` field lists the
+  breaking and forming bonds that aren't partial (a full bond, up to 1.05 times the
+  covalent-radius sum, or longer than twice it). An end point is checked on its side,
+  `geometry_mismatches(products(ts), geo)`.
 - `canonical_form`, `canonical_json`, `relabel` and `canonical_direction` accept a
   union argument (`AnyGraph`, or `ReactionGraph | StereoReactionGraph` for
   `canonical_direction`), which ty rejected before; a precise argument still gives the

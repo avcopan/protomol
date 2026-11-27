@@ -140,18 +140,27 @@ of every LS. Here an embedding of each side stands in for the IRC's end points:
 ```python
 >>> fwd, bwd = pm.embed(prd), pm.embed(rct)   # stand in for the IRC's end points
 >>> pm.geometry_mismatches(prd, fwd)
-GeometryMismatches(missing_bonds=(), extra_bonds=(), stereo=())
+GeometryMismatches(missing_bonds=(), extra_bonds=(), reacting_bonds=(), stereo=())
 >>> pm.geometry_mismatches(prd, bwd).stereo   # the wrong end: (Z) at C1=C2
 ((1, 2),)
 
 ```
 
-On the TS graph itself, only the bonds that neither break nor form and the LS that don't
-change are compared, so it agrees with either end point:
+The TS graph itself is checked against a TS geometry: the bonds that neither break nor
+form, the breaking and forming bonds, which must be partial (`reacting_bonds`), the LS
+that don't change, and each determined `ts` slot. A planar end point contradicts neither
+twist, but a twisted geometry agrees with only one of the two mirror-image TSs:
 
 ```python
->>> pm.geometry_mismatches(ts, bwd) == pm.geometry_mismatches(ts, fwd)
-True
+>>> import autogeom
+>>> twisted = autogeom.twist(bwd, (1, 2), 90, degrees=True)
+>>> plus = pm.examples.stereoisomerization_ts()     # AtropBond parity 1
+>>> twist = pm.stereo_at(plus, (1, 2)).ts
+>>> minus = pm.with_stereo(plus, pm.StereoChange(reactant=z, product=e, ts=pm.invert(twist)))
+>>> [pm.geometry_mismatches(g, bwd).stereo for g in (plus, minus)]
+[(), ()]
+>>> sorted(pm.geometry_mismatches(g, twisted).stereo for g in (plus, minus))
+[(), ((1, 2),)]
 
 ```
 

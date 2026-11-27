@@ -8,6 +8,7 @@ parity readers. `geometry_mismatches` compares a graph with a geometry through t
 bond perception and parity readers (P61).
 """
 
+import itertools
 from dataclasses import dataclass
 
 import numpy as np
@@ -18,7 +19,14 @@ from rdkit.Chem import rdDistGeom
 
 from ._lewis import _lewis
 from ._smiles import _from_rdkit_mol
-from ._stereo import AtropBond, PlanarBond, Stereo, Tetrahedral, site
+from ._stereo import (
+    AtropBond,
+    PlanarBond,
+    Stereo,
+    Tetrahedral,
+    TrigonalBipyramidal,
+    site,
+)
 from ._types import (
     AnyGraph,
     GraphError,
@@ -26,6 +34,7 @@ from ._types import (
     ReactionGraph,
     StereoMolGraph,
     StereoReactionGraph,
+    _site_key,
     with_stereo,
 )
 from ._vendor.stereomolgraph.coords import handedness
@@ -36,6 +45,9 @@ type _Vector = np.ndarray[tuple[int], np.dtype[np.float64]]
 # Below these, a centre is flat or a bond twisted by about 90° (no parity is read)
 _MIN_VOLUME = 0.3  # |det| of three unit-vector differences; ideal tetrahedron: 3.08
 _MIN_COSINE = 0.3  # |cos| (planar) or |sin| (axial) of the dihedral between the ends
+# A breaking or forming bond's length at a TS, over the covalent-radius sum (P69)
+# (a full bond is up to about 1.03 times the sum with autogeom's radii)
+_REACTING_RANGE = (1.05, 2.0)
 
 _EMBED_ATTEMPTS = 100  # ETKDG random seeds 0, 1, …
 _PYRAMID_HEIGHT = 0.35  # Å of a pyramidal centre above its neighbours' plane
@@ -89,17 +101,24 @@ class GeometryMismatches:
     Attributes:
         missing_bonds: The graph's bonds that the geometry doesn't have.
         extra_bonds: The geometry's bonds that the graph doesn't have.
+        reacting_bonds: A reaction graph's breaking and forming bonds whose length in
+            the geometry is outside a TS's range: a full bond (at most 1.05 times the
+            covalent-radius sum), or longer than twice the sum (P69). Empty for a
+            species.
         stereo: The sites (as `site(ls)` gives them) of the LS whose parity the
             geometry contradicts.
     """
 
     missing_bonds: tuple[tuple[int, int], ...]
     extra_bonds: tuple[tuple[int, int], ...]
+    reacting_bonds: tuple[tuple[int, int], ...]
     stereo: tuple[int | tuple[int, int], ...]
 
     def __bool__(self) -> bool:
         """True if the graph and the geometry disagree anywhere."""
-        return bool(self.missing_bonds or self.extra_bonds or self.stereo)
+        return bool(
+            self.missing_bonds or self.extra_bonds or self.reacting_bonds or self.stereo
+        )
 
 
 def geometry_mismatches(gra: AnyGraph, geo: Geometry) -> GeometryMismatches:
@@ -108,14 +127,18 @@ def geometry_mismatches(gra: AnyGraph, geo: Geometry) -> GeometryMismatches:
     Bonds are perceived from covalent radii as `from_geometry` perceives them, and each
     determined LS's parity is read with `from_geometry`'s readers. An LS the
     coordinates don't decide (a flat centre, a double bond twisted by about 90°) is
-    not a mismatch, and neither is an undetermined LS. On a reaction graph only the
-    bonds that neither break nor form and the LS that don't change are compared, so
-    the geometry may be either side's or the TS's.
+    not a mismatch, and neither is an undetermined LS.
+
+    A reaction graph's geometry is its TS's: the bonds that neither break nor form
+    are compared, the breaking and forming bonds must be partial (`reacting_bonds`),
+    and the LS that don't change and the determined `ts` slots are read, a slot on its
+    listed neighbours (P69). An end point is checked on its side:
+    `geometry_mismatches(products(ts), geo)`.
 
     >>> from protomol import embed, examples, from_smiles
     >>> gra = examples.species()
     >>> geometry_mismatches(gra, embed(gra))
-    GeometryMismatches(missing_bonds=(), extra_bonds=(), stereo=())
+    GeometryMismatches(missing_bonds=(), extra_bonds=(), reacting_bonds=(), stereo=())
     >>> bool(geometry_mismatches(gra, embed(gra)))
     False
     >>> geometry_mismatches(gra, embed(from_smiles(r"C[C@H](O)/C=C/C"))).stereo
@@ -124,7 +147,8 @@ def geometry_mismatches(gra: AnyGraph, geo: Geometry) -> GeometryMismatches:
     Raises:
         GraphError: If the geometry's symbols differ from the graph's.
         NotImplementedError: For an LS kind the readers don't read (only
-            `Tetrahedral`, `PlanarBond` and `AtropBond` are read).
+            `Tetrahedral`, `TrigonalBipyramidal`, `PlanarBond` and `AtropBond` are
+            read).
     """
     if tuple(geo.symbols) != gra.symbols:
         msg = f"The geometry's atoms {geo.symbols} differ from the graph's"
@@ -136,10 +160,23 @@ def geometry_mismatches(gra: AnyGraph, geo: Geometry) -> GeometryMismatches:
     )
     have = set(gra.bonds) - changing
     found = set(_perceived_bonds(geo)) - changing
+    xyz = np.asarray(geo.coordinates, dtype=np.float64)
+    radii = np.asarray(geo.covalent_radii, dtype=np.float64)
+    reacting = [
+        (i, j)
+        for i, j in sorted(changing)
+        if not (
+            _REACTING_RANGE[0]
+            <= np.linalg.norm(xyz[i] - xyz[j]) / (radii[i] + radii[j])
+            <= _REACTING_RANGE[1]
+        )
+    ]
     stereo: list[int | tuple[int, int]] = []
     if isinstance(gra, StereoMolGraph | StereoReactionGraph):
-        xyz = np.asarray(geo.coordinates, dtype=np.float64)
-        for ls in (*gra.atom_stereo, *gra.bond_stereo):
+        lss: list[Stereo] = [*gra.atom_stereo, *gra.bond_stereo]
+        if isinstance(gra, StereoReactionGraph):
+            lss.extend(c.ts for c in gra.stereo_changes if c.ts is not None)
+        for ls in sorted(lss, key=lambda ls: _site_key(site(ls))):
             if ls.parity is None:
                 continue
             read = _ls_from_coords(ls, xyz)
@@ -148,6 +185,7 @@ def geometry_mismatches(gra: AnyGraph, geo: Geometry) -> GeometryMismatches:
     return GeometryMismatches(
         missing_bonds=tuple(sorted(have - found)),
         extra_bonds=tuple(sorted(found - have)),
+        reacting_bonds=tuple(reacting),
         stereo=tuple(stereo),
     )
 
@@ -326,6 +364,8 @@ def _ls_from_coords(ls: Stereo, xyz: _Coords) -> Stereo:
     """The configuration of `ls` in the coordinates, or `ls` undetermined if unclear."""
     if isinstance(ls, Tetrahedral):
         return _tetrahedral_from_coords(ls, xyz)
+    if isinstance(ls, TrigonalBipyramidal):
+        return _trigonal_bipyramidal_from_coords(ls, xyz)
     if isinstance(ls, PlanarBond):
         return _planar_bond_from_coords(ls, xyz)
     if isinstance(ls, AtropBond):
@@ -349,6 +389,34 @@ def _tetrahedral_from_coords(ls: Tetrahedral, xyz: _Coords) -> Tetrahedral:
         return Tetrahedral(atoms=ls.atoms)
     parity = int(handedness(points))
     return Tetrahedral(atoms=ls.atoms, parity=1 if parity > 0 else -1)
+
+
+def _trigonal_bipyramidal_from_coords(
+    ls: TrigonalBipyramidal, xyz: _Coords
+) -> TrigonalBipyramidal:
+    """The axial pair has the widest angle; the parity is stereomolgraph's reading.
+
+    As stereomolgraph's `_trigonal_bipyramidal_from_coords`: with a1 and a2 axial,
+    the parity is minus the `handedness` of (e1, e2, e3, a1), which must equal that of
+    (e1, e2, e3, a2). Undetermined if they differ, or with a lone pair (None).
+    """
+    center, *nbrs = ls.atoms
+    if None in nbrs:
+        return TrigonalBipyramidal(atoms=ls.atoms)
+    vecs = np.array([_unit(xyz[n] - xyz[center]) for n in nbrs])
+    i, j = min(
+        itertools.combinations(range(5), 2),
+        key=lambda pair: float(np.dot(vecs[pair[0]], vecs[pair[1]])),
+    )
+    equator = [k for k in range(5) if k not in (i, j)]
+    top = -int(handedness(vecs[[*equator, i]]))
+    bottom = int(handedness(vecs[[*equator, j]]))
+    if top != bottom or top == 0:
+        return TrigonalBipyramidal(atoms=ls.atoms)
+    return TrigonalBipyramidal(
+        atoms=(center, *(nbrs[k] for k in (i, j, *equator))),
+        parity=1 if top > 0 else -1,
+    )
 
 
 def _planar_bond_from_coords(ls: PlanarBond, xyz: _Coords) -> PlanarBond:
