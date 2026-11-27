@@ -161,17 +161,42 @@ def _centre_slot(
 
 
 def _with_ts_slots(gra: StereoReactionGraph) -> list[StereoReactionGraph]:
-    """`gra` with every combination of `ts` slots at its TS sites (`_ts_slot`)."""
+    """`gra` with every combination of `ts` slots at its TS sites (`_ts_slot`).
+
+    A determined slot the rules allow is kept (a chosen twist stays one channel).
+    """
     sites = set(_ts_sites(gra))
-    changes = [c for c in gra.stereo_changes if _site(c) in sites]
-    options = [
-        [
-            StereoChange(reactant=c.reactant, product=c.product, ts=ts)
-            for ts in _ts_slot(c, gra)
-        ]
-        for c in changes
-    ]
+    options: list[list[StereoChange]] = []
+    for c in gra.stereo_changes:
+        if _site(c) not in sites:
+            continue
+        slots = _ts_slot(c, gra)
+        if c.ts is not None and c.ts.parity is not None and c.ts in slots:
+            slots = [c.ts]
+        options.append(
+            [
+                StereoChange(reactant=c.reactant, product=c.product, ts=ts)
+                for ts in slots
+            ]
+        )
     return [with_stereo(gra, *combo) for combo in itertools.product(*options)]
+
+
+def _is_open_by_rule(change: StereoChange, gra: StereoReactionGraph) -> bool:
+    """Whether the rules leave a change's `ts` slot undetermined with its sides fixed.
+
+    A bifurcation: the configuration is set after the TS, so the TS doesn't fix the
+    side slot either (P74). Also a change no rule covers.
+    """
+    sides = [ls for ls in (change.reactant, change.product) if ls is not None]
+    if not sides or any(ls.parity is None for ls in sides):
+        return False
+    if _site(change) not in _ts_sites(gra):
+        return False
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        slots = _ts_slot(change, gra)
+    return len(slots) == 1 and slots[0] is not None and slots[0].parity is None
 
 
 def _with_ts_slot(gra: StereoReactionGraph) -> StereoReactionGraph:

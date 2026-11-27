@@ -53,6 +53,13 @@ def _ts(srg: pm.StereoReactionGraph, site: int | tuple[int, int]) -> pm.Stereo:
     return ts
 
 
+def _product(srg: pm.StereoReactionGraph, site: int | tuple[int, int]) -> pm.Stereo:
+    """The site's product slot, which must be an LS."""
+    ls = _change(srg, site).product
+    assert ls is not None
+    return ls
+
+
 def _reverse_is_a_channel(srg: pm.StereoReactionGraph) -> bool:
     """The reverse search finds the reverse TS, ts slots included (P81)."""
     back = pm.ts_graphs(pm.products(srg), pm.reactants(srg))
@@ -197,3 +204,59 @@ def test_constructor_does_not_infer() -> None:
     (change,) = srg.stereo_changes
     bare = pm.with_stereo(srg, pm.StereoChange(reactant=change.reactant))
     assert bare.stereo_changes[0].ts is None
+
+
+def test_stereoisomers_bifurcation() -> None:
+    """2: two channels (one per product), one transition_state (P74)."""
+    (srg,) = _channels("CC#CF.[OH]", "CC(O)=[C]F")  # the product left open
+    for g in (srg, pm.without_stereo(srg)):
+        channels = pm.stereoisomers(g)
+        assert len(channels) == 2
+        assert {_product(c, (1, 2)).parity for c in channels} == {0}
+        assert all(_ts(c, (1, 2)).parity is None for c in channels)
+        first, second = (pm.transition_state(c) for c in channels)
+        assert first == second
+        assert _product(first, (1, 2)).parity is None
+
+
+def test_stereoisomers_rotation() -> None:
+    """3: reaction_graph's unchosen twist gives the two channels of ts_graphs."""
+    rct, prd = pm.from_smiles(r"[CH2]/C=C\C"), pm.from_smiles(r"[CH2]/C=C/C")
+    isos = pm.stereoisomers(pm.reaction_graph(rct, prd))
+    channels = pm.ts_graphs(rct, prd)
+    assert len(isos) == len(channels) == 2
+    for iso in isos:
+        assert any(pm.isomorphism(iso, c) is not None for c in channels)
+    assert pm.stereoisomers(channels[0]) == [channels[0]]  # determined: itself
+
+
+def test_stereoisomers_sn2() -> None:
+    """1: an open centre gives backside and frontside, each with its mirror image."""
+    (srg,) = _channels("FC(Cl)Br.[I-]", "FC(Cl)I.[Br-]")
+    isos = pm.stereoisomers(srg)
+    kinds = sorted(_ts(g, 1).kind for g in isos)
+    assert kinds == ["Tetrahedral"] * 2 + ["TrigonalBipyramidal"] * 2
+    assert pm.stereoisomers(pm.without_stereo(srg)) == isos
+
+
+def test_stereoisomers_ts_only_site() -> None:
+    """StereoMolGraph's fleeting-stereo example: an open TS-only centre gives two."""
+    srg = pm.StereoReactionGraph(
+        symbols=["C", "Cl", "Br", "F", "I"],
+        bonds=[(0, 1), (0, 2), (0, 3), (0, 4)],
+        stereo_changes=[pm.StereoChange(ts=pm.Tetrahedral(atoms=(0, 1, 2, 3, 4)))],
+    )
+    isos = pm.stereoisomers(srg)
+    assert {_ts(g, 0).parity for g in isos} == {1, -1}
+
+
+def test_transition_state_keeps_other_graphs() -> None:
+    """A TS with no bifurcation is returned as it is (an unchosen twist included)."""
+    for srg in (
+        pm.examples.abstraction_ts(),
+        pm.examples.stereoisomerization_ts(),
+        pm.reaction_graph(pm.from_smiles(r"C/C=C\C"), pm.from_smiles("C/C=C/C")),
+    ):
+        assert pm.transition_state(srg) == srg
+    with pytest.raises(TypeError):
+        pm.transition_state(pm.examples.species())  # ty: ignore[invalid-argument-type]

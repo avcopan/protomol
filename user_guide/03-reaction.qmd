@@ -45,7 +45,8 @@ SN2 at a stereocentre, I⁻ + CHFClBr → CHFClI + Br⁻ (atoms: C0, F1, Cl2, Br
 The centre's LS changes, so it is a `StereoChange`. Backside attack inverts the centre: I5
 takes the place of Br3 with the opposite parity. At the TS the centre is five-coordinate,
 a `TrigonalBipyramidal` with I5 and Br3 axial. Its configuration follows from the
-reactant's; this graph leaves it undetermined, and `ts_graphs` (Phase 5) will fill it in.
+reactant's. A constructor takes the slots as given, so this hand-built graph leaves it
+undetermined; `reaction_graph`, `from_reaction_smiles`, `low_t` and `ts_graphs` set it.
 
 ```python
 >>> rct = pm.Tetrahedral(atoms=(0, 1, 2, 3, 4), parity=1)
@@ -62,8 +63,18 @@ reactant's; this graph leaves it undetermined, and `ts_graphs` (Phase 5) will fi
 >>> change = pm.stereo_at(ts, 0)
 >>> change.reactant == rct, change.product == prd, change.ts.kind
 (True, True, 'TrigonalBipyramidal')
+>>> pm.stereo_at(pm.reaction_graph(pm.reactants(ts), pm.products(ts)), 0).ts
+TrigonalBipyramidal(kind='TrigonalBipyramidal', atoms=(0, 3, 5, 1, 2, 4), parity=1)
 
 ```
+
+Each change at a TS site, an LS with an atom in a breaking or forming bond (or, with no
+bond change, at the changing site), gets its `ts` slot by rule from the two sides: an LS
+on one side only carries over (an abstraction centre is still pyramidal at the TS, an
+attacked face is fixed by the attack), inversion at a centre gives the backside
+`TrigonalBipyramidal` and retention a `Tetrahedral` with `None` where the leaving and
+attacking atoms meet, a lone-pair inversion is planar (`None`). The rules give the same
+slot in either direction.
 
 A stereo change needs no bond change. In the but-2-en-1-yl radical, CH2•–CH=CH–CH3
 (atoms: C0–C3, H4–H10), resonance gives C1=C2 its double-bond character. Rotating
@@ -107,13 +118,33 @@ two channels, with the axis determined:
 
 ```
 
-::: {.callout-note}
-Planned: Phase 5 (`ts_graphs` with fleeting stereo).
-:::
+`ts_graphs` gives both channels:
 
 ```python
-channels = pm.ts_graphs(z_radical, e_radical)   # the two mirror-image rotation TSs
-[pm.stereo_at(ts, (1, 2)).ts.parity for ts in channels]   # [-1, 1]
+>>> channels = pm.ts_graphs(pm.from_smiles(r"[CH2]/C=C\C"), pm.from_smiles(r"[CH2]/C=C/C"))
+>>> sorted(pm.stereo_at(ts, (1, 2)).ts.parity for ts in channels)
+[-1, 1]
+>>> channel in channels
+True
+
+```
+
+## Bifurcations
+
+When OH adds to 1-fluoropropyne, the alkenyl radical's (Z) or (E) configuration is set
+after the TS: one TS leads to both products. The `ts` slot stays undetermined, and each
+product configuration is its own channel. `transition_state` drops what the TS doesn't
+fix, so both channels give one TS:
+
+```python
+>>> alkyne = pm.from_smiles("CC#CF.[OH]")
+>>> (either,) = pm.ts_graphs(alkyne, pm.from_smiles("CC(O)=[C]F"))
+>>> first, second = pm.stereoisomers(either)   # one channel per product configuration
+>>> pm.stereo_at(first, (1, 2)).ts.parity is None
+True
+>>> first == second, pm.transition_state(first) == pm.transition_state(second)
+(False, True)
+
 ```
 
 ## The two sides, and the IRC end points
@@ -165,7 +196,7 @@ twist, but a twisted geometry agrees with only one of the two mirror-image TSs:
 ```
 
 ::: {.callout-note}
-Planned: Phase 4 (`reacting_core`) and Phase 5 (`transition_state`, `inverted_stereo`).
+Planned: Phase 4 (`reacting_core`).
 :::
 
 ```python

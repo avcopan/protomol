@@ -81,7 +81,7 @@ def test_mirror_images() -> None:
     assert sum(pm.is_chiral(smg) for smg in isos) == 2
 
 
-def test_reaction_graph_rejected() -> None:
-    """Reaction graphs wait for TS sites (P74)."""
-    with pytest.raises(TypeError, match="species graph"):
-        pm.stereoisomers(pm.examples.abstraction_ts())  # ty: ignore[invalid-argument-type]
+def test_not_a_graph_rejected() -> None:
+    """Reaction graphs are tested with TS sites (tests/test_ts_sites.py)."""
+    with pytest.raises(TypeError, match="takes a graph"):
+        pm.stereoisomers("CC")  # ty: ignore[no-matching-overload]

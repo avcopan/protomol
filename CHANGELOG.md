@@ -30,7 +30,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   undetermined LS takes each configuration, determined ones are kept, and the results
   are deduplicated up to atom numbering; a `MolGraph` first gets its low-T sites. Gives
   StereoMolGraph SI-001's 10 stereoisomers. An allene's two collapse to one, as the
-  back-end drops chain LS (P45). Reaction graphs come with TS sites (P74).
+  back-end drops chain LS (P45). On a `ReactionGraph` (after `low_t`) or a
+  `StereoReactionGraph` (P74), each change's side slots are expanded and its `ts` slot
+  follows by the TS-slot rules, so the results are the channels: a rotation's two
+  twisted TSs, an open SN2 centre's backside and frontside TSs and their mirror
+  images. A bifurcation's `ts` slot stays undetermined (one channel per product).
+- `transition_state(srg)` (P74, P5): where the TS-slot rules leave a change's `ts`
+  slot undetermined with its sides determined (a bifurcation), the side slots become
+  undetermined too, so a bifurcation's channels give one TS graph; any other graph is
+  returned as it is.
 
 ### Changed
 

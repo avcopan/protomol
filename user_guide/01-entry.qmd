@@ -105,13 +105,22 @@ the reactant's spin for the singlet channel:
 
 ```
 
-::: {.callout-note}
-Planned: Phase 5 (stereo expansion of the TS, fleeting stereo).
-:::
+A channel whose sides leave some stereo open stands for several TSs. `stereoisomers`
+lists them: each undetermined LS on either side takes every configuration, and each
+change's `ts` slot follows by the TS-slot rules. SN2 at an open centre gives backside
+attack (the `TrigonalBipyramidal` TS, inversion) and frontside attack (retention), each
+with its mirror image:
+
+```python
+>>> (srg,) = pm.ts_graphs(pm.from_smiles("FC(Cl)Br.[I-]"), pm.from_smiles("FC(Cl)I.[Br-]"))
+>>> sorted(pm.stereo_at(ts, 1).ts.kind for ts in pm.stereoisomers(srg))
+['Tetrahedral', 'Tetrahedral', 'TrigonalBipyramidal', 'TrigonalBipyramidal']
+
+```
 
 ```python
 for srg in pm.ts_graphs(rct, prd):
-    for ts in pm.stereoisomers(srg):   # TS stereoisomers, fleeting stereo
+    for ts in pm.stereoisomers(srg):   # the TS stereoisomers
         run_ts_workflow(ts)            # ae, illustrative
 ```
 
